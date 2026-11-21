@@ -193,8 +193,7 @@
 <div id="archivio">
   <label>Selected</label>
   <span class="pill" id="selected-meeting">—</span>
-  <button id="btn-transcript" disabled>Show transcript</button>
-  <button id="btn-documents" disabled>Show documents</button>
+  <button id="btn-open" disabled>Open</button>
   <button id="btn-finalize" disabled>Generate documents</button>
   <button id="btn-accurate" disabled>Accurate transcription</button>
   <span id="job"></span>
@@ -256,6 +255,7 @@ let elapsedClock = Date.now();
 let meetings = [];
 let meetingListSignature = "";
 let currentMeetingId = null;
+let currentMeetingKind = null;
 let currentStatus = {};
 
 let activeTheme = "dark";
@@ -389,10 +389,8 @@ function updateArchiveButtons() {
   const live = currentStatus.status === "live";
   const busy = (currentStatus.jobs || []).some(j => j.status === "in progress");
   const chosen = !!currentMeetingId;
-  const docs = (info?.documents || []).length > 0;
   $("selected-meeting").textContent = info ? meetingLabel(info) : "—";
-  $("btn-transcript").disabled = !chosen;
-  $("btn-documents").disabled = !chosen || !docs;
+  $("btn-open").disabled = !chosen;
   $("btn-finalize").disabled = live || busy || !chosen;
   $("btn-accurate").disabled = live || busy || !chosen;
   document.querySelectorAll(".menu .menu-item").forEach(el => {
@@ -405,13 +403,13 @@ function meetingLabel(m) {
   return m.meeting_id.replace(/^(\d{8})-(\d{2})(\d{2})(\d{2})$/, "$1-$2:$3:$4");
 }
 
-// Three separate menus: basic (live only), accurate (Whisper), documents (generated files).
-// A meeting can appear in more than one menu: it's useful to be able to find it in both.
+// Three separate menus: base (every saved meeting), accurate (Whisper), documents.
+// A meeting can appear in more than one menu: the base list always contains all of them.
 const menuDefs = [
   {
     key: "base", list: "list-base", count: "count-base",
-    filter: m => !m.has_accurate && !(m.documents || []).length,
-    meta: m => `live · audio ${fmtHMS(m.duration_seconds)}`,
+    filter: m => true,
+    meta: m => `audio ${fmtHMS(m.duration_seconds)}`,
   },
   {
     key: "accurate", list: "list-accurate", count: "count-accurate",
@@ -426,10 +424,18 @@ const menuDefs = [
 ];
 
 function selectMeeting(id, kind) {
+  // Only select: opening a viewer here would cover the menus and prevent
+  // changing the selected meeting without closing the overlay first.
   currentMeetingId = id;
+  currentMeetingKind = kind;
   document.querySelectorAll("#menu details").forEach(d => { d.open = false; });
   updateArchiveButtons();
-  if (kind === "docs") showDocuments();
+}
+
+function openSelected() {
+  const info = selectedMeetingInfo();
+  if (currentMeetingKind === "docs" && (info?.documents || []).length) showDocuments();
+  else if (info && (info.transcript_chars || 0) === 0 && (info.documents || []).length) showDocuments();
   else showTranscript();
 }
 
@@ -574,9 +580,8 @@ function generateDocument(kind) {
   if (id) postJson("/api/generate-document", {meeting_id: id, kind: kind});
 }
 
-$("btn-transcript").onclick = showTranscript;
+$("btn-open").onclick = openSelected;
 $("btn-close-transcript").onclick = () => { $("transcript-overlay").hidden = true; };
-$("btn-documents").onclick = showDocuments;
 $("btn-generate-md").onclick = () => generateDocument("md");
 $("btn-generate-pdf").onclick = () => generateDocument("pdf");
 $("btn-generate-docx").onclick = () => generateDocument("docx");

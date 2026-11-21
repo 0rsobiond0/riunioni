@@ -52,17 +52,17 @@ external display, and switch to fullscreen (`F11`).
   `audio.wav`, `riunione.json`, and `trascrizione.txt` — nothing else.
 - **Three dropdown menus**, placed below the top bar so each workflow stays
   separate:
-  - `Base meetings` — audio and live transcription only (Vosk);
+  - `Base meetings` — every saved meeting (audio + live Vosk transcript);
   - `Accurate` — meetings with Whisper transcription, with a time estimate;
   - `Documents` — meetings with generated files (PDF/DOCX/Markdown/diagrams).
 
-  A meeting can appear in more than one menu: for example, a meeting that has
-  both an accurate transcript and documents appears in `Accurate` and in
-  `Documents`. Selecting an item opens the corresponding panel immediately
-  (the transcript for `Base meetings`/`Accurate`, the documents for `Documents`).
-- **Action bar**: above the dropdown menus, with the selected meeting,
-  `Show transcript`, `Show documents`, `Generate all documents`, and
-  `Accurate transcription`.
+  A meeting can appear in more than one menu: one with an accurate transcript
+  and documents appears in all three. Selecting an item only changes the
+  selection — no panel opens, so you can keep switching meetings. `Open` then
+  shows the matching viewer (transcript by default, documents when the item
+  was chosen from `Documents` or the transcript is empty).
+- **Action bar**: above the dropdown menus, with the selected meeting, a single
+  `Open` button, `Generate all documents`, and `Accurate transcription`.
 - **Viewers**: the transcript and document panels are full-screen overlays above
   the bars, with a `Close` button (or `Esc`) that is always clickable. The
   document viewer has separate buttons — `Generate Markdown`, `Generate PDF`,
