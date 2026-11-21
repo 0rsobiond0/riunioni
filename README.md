@@ -58,11 +58,12 @@ external display, and switch to fullscreen (`F11`).
 
   A meeting can appear in more than one menu: one with an accurate transcript
   and documents appears in all three. Selecting an item only changes the
-  selection — no panel opens, so you can keep switching meetings. `Open` then
-  shows the matching viewer (transcript by default, documents when the item
-  was chosen from `Documents` or the transcript is empty).
+  selection — no panel opens, so you can keep switching meetings. `Fast transcript`
+  then shows the matching viewer (the live transcript by default, documents when
+  the item was chosen from `Documents` or the transcript is empty).
 - **Action bar**: above the dropdown menus, with the selected meeting, a single
-  `Open` button, `Generate all documents`, and `Accurate transcription`.
+  `Fast transcript` button, `Generate all documents`, and
+  `Generate accurate transcription` (which starts a job, it does not open a panel).
 - **Viewers**: the transcript and document panels are full-screen overlays above
   the bars, with a `Close` button (or `Esc`) that is always clickable. The
   document viewer has separate buttons — `Generate Markdown`, `Generate PDF`,
@@ -71,7 +72,7 @@ external display, and switch to fullscreen (`F11`).
 
 ### Transcription and documents are separate actions
 
-- `Accurate transcription` runs Whisper on the saved audio and rewrites only
+- `Generate accurate transcription` runs Whisper on the saved audio and rewrites only
   `trascrizione.txt` / `trascrizione.json`. It also keeps the original live
   transcript as `trascrizione-live.txt`. It **never** generates or deletes
   documents, and it works on past meetings even if documents already exist.
@@ -158,7 +159,7 @@ summary.
 - `riunione.json` — structured minutes (regenerable without re-running the AI);
 - `trascrizione.txt` — live transcript.
 
-After `Accurate transcription`:
+After `Generate accurate transcription`:
 
 - `trascrizione.json` — Whisper segments with timestamps;
 - `trascrizione.txt` — replaced by the accurate version;
