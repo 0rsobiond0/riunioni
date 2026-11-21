@@ -1,0 +1,21 @@
+# Ambiente virtuale e bytecode
+.venv/
+__pycache__/
+*.pyc
+
+# Modelli pesanti: si scaricano a parte, non stanno nel repo
+models/
+
+# Registrazioni, trascrizioni e documenti reali: MAI su GitHub
+output/
+
+# Segreti ed eventuali configurazioni locali
+.env
+*.key
+*.pem
+
+# Cache di strumenti e filesystem
+.pytest_cache/
+.mypy_cache/
+*.log
+.DS_Store

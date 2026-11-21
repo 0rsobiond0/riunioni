@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>{{ titolo }}</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm; }
+  body {
+    font-family: "DejaVu Sans", "Noto Sans", sans-serif;
+    font-size: 10.5pt; line-height: 1.5; color: #1a2233;
+  }
+  h1 { font-size: 21pt; color: #14224a; margin: 0 0 4mm; }
+  h2 {
+    font-size: 13pt; color: #20386f; margin: 8mm 0 3mm;
+    border-bottom: 1px solid #b9c6e4; padding-bottom: 1.5mm;
+  }
+  h3 { font-size: 11pt; color: #2c4b8f; margin: 5mm 0 1mm; }
+  .meta { color: #55617a; font-size: 9.5pt; margin: 0 0 3mm; }
+  ul { margin: 1mm 0 3mm; padding-left: 6mm; }
+  li { margin-bottom: 1.2mm; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 9.5pt; }
+  th, td { border: 1px solid #c3cee6; padding: 1.8mm 2mm; text-align: left; vertical-align: top; }
+  th { background: #e9eef9; color: #20386f; }
+  .transcript { font-size: 9pt; color: #33405a; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+  <h1>{{ titolo }}</h1>
+  <p class="meta">
+    {% if data %}Data: {{ data }}<br>{% endif %}
+    {% if partecipanti %}Partecipanti: {{ partecipanti|join(", ") }}{% endif %}
+  </p>
+
+  <h2>Riassunto</h2>
+  <p>{{ riassunto }}</p>
+
+  {% if decisioni %}
+  <h2>Decisioni</h2>
+  <ul>{% for d in decisioni %}<li>{{ d }}</li>{% endfor %}</ul>
+  {% endif %}
+
+  {% if azioni %}
+  <h2>Azioni</h2>
+  <table>
+    <tr><th>Cosa</th><th>Chi</th><th>Scadenza</th></tr>
+    {% for a in azioni %}
+    <tr>
+      {% if a is mapping %}
+      <td>{{ a.get('cosa', '') }}</td><td>{{ a.get('chi', '') }}</td><td>{{ a.get('scadenza', '') }}</td>
+      {% else %}
+      <td>{{ a }}</td><td></td><td></td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  {% if argomenti %}
+  <h2>Argomenti</h2>
+  {% for a in argomenti %}
+    {% if a is mapping %}
+    <h3>{{ a.get('titolo', '') }}</h3>
+    <ul>{% for p in a.get('punti', []) %}<li>{{ p }}</li>{% endfor %}</ul>
+    {% else %}
+    <ul><li>{{ a }}</li></ul>
+    {% endif %}
+  {% endfor %}
+  {% endif %}
+
+  {% if trascrizione %}
+  <h2>Trascrizione completa</h2>
+  <div class="transcript">{{ trascrizione }}</div>
+  {% endif %}
+</body>
+</html>

@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registratore riunioni · display</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b1020;            --fg: #eef3ff;
+    --panel: #141c34;         --panel-2: #0e1730;   --header: #141c34;
+    --line: #2b3a63;          --line-soft: #2b3a63;
+    --control: #223055;       --control-hover: #2f4174; --control-border: #4b5f96;
+    --muted: #8fa8e8;         --accent: #ffd479;
+    --danger: #ff8a8a;        --live-bg: #14532d; --err-bg: #7f1d1d;
+    --live-fg: #eef3ff;       --err-fg: #eef3ff;
+    --overlay: rgba(5, 9, 20, .96);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f6f8fc;            --fg: #1b2440;
+    --panel: #ffffff;         --panel-2: #eef2f9;   --header: #e9eef8;
+    --line: #c9d3e6;          --line-soft: #dce3f0;
+    --control: #e4eaf6;       --control-hover: #d5def0; --control-border: #b4c1db;
+    --muted: #4a5f96;         --accent: #9a6200;
+    --danger: #b3261e;        --live-bg: #d8f0dd; --err-bg: #f9d9d5;
+    --live-fg: #14532d;       --err-fg: #7f1d1d;
+    --overlay: rgba(246, 248, 252, .97);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; overflow: hidden;
+    background: var(--bg); color: var(--fg);
+    font-family: "Noto Sans", "DejaVu Sans", system-ui, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: .6rem; flex: none;
+    padding: .55rem 1.2rem; background: var(--header);
+    border-bottom: 2px solid var(--line); font-size: 1.1rem;
+  }
+  header h1 { font-size: 1.25rem; margin: 0; flex: 1; }
+  .pill { padding: .2rem .7rem; border-radius: 1rem; background: var(--control); font-size: .95rem; }
+  .pill.live { background: var(--live-bg); color: var(--live-fg); }
+  .pill.err { background: var(--err-bg); color: var(--err-fg); }
+  /* Barre sempre sopra gli overlay: i pulsanti restano cliccabili anche
+     mentre si sta guardando la trascrizione o i documenti. */
+  header, #menu, #archivio { position: relative; z-index: 20; }
+  #menu {
+    display: flex; align-items: flex-start; gap: .6rem; flex: none;
+    padding: .35rem 1.2rem; background: var(--panel-2);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .menu { position: relative; }
+  .menu summary {
+    cursor: pointer; list-style: none; user-select: none;
+    padding: .3rem .85rem; border-radius: .5rem; font-size: .95rem;
+    background: var(--control); color: var(--fg);
+    border: 1px solid var(--control-border);
+  }
+  .menu summary::-webkit-details-marker { display: none; }
+  .menu summary:hover { background: var(--control-hover); }
+  .menu .count {
+    margin-left: .4rem; padding: 0 .45rem; border-radius: .8rem;
+    background: var(--panel); color: var(--muted); font-size: .8rem;
+  }
+  .menu-list {
+    position: absolute; top: calc(100% + .35rem); left: 0; z-index: 30;
+    min-width: 24rem; max-height: 62vh; overflow: auto;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: .6rem; padding: .4rem;
+    box-shadow: 0 .8rem 2rem rgba(0, 0, 0, .45);
+  }
+  .menu .menu-item {
+    display: block; width: 100%; text-align: left;
+    padding: .55rem .7rem; margin-bottom: .2rem; font-size: 1rem;
+    background: transparent; border: 1px solid transparent; border-radius: .45rem;
+  }
+  .menu .menu-item:hover, .menu .menu-item.selected {
+    background: var(--control); border-color: var(--control-border);
+  }
+  .menu .menu-item .meta { display: block; color: var(--muted); font-size: .85rem; }
+  .menu-empty { padding: .6rem; color: var(--muted); font-size: .95rem; }
+  #archivio {
+    display: flex; align-items: center; gap: .6rem; flex: none;
+    padding: .4rem 1.2rem; background: var(--panel-2);
+    border-bottom: 1px solid var(--line-soft); font-size: .95rem;
+  }
+  #archivio label { color: var(--muted); }
+  #selected-meeting { font-variant-numeric: tabular-nums; }
+  #job { margin-left: auto; color: var(--accent); font-size: .9rem; }
+  #job.err { color: var(--danger); }
+  #transcript-overlay {
+    position: fixed; inset: 0; z-index: 10; padding: 3rem;
+    background: var(--overlay); display: flex;
+    align-items: center; justify-content: center;
+  }
+  #transcript-overlay[hidden] { display: none; }
+  #transcript-overlay .panel {
+    width: min(1100px, 100%); max-height: 100%; display: flex; flex-direction: column;
+    background: var(--panel); border: 2px solid var(--line); border-radius: .8rem; padding: 1.2rem;
+  }
+  #transcript-overlay .head { display: flex; align-items: center; gap: 1rem; margin-bottom: .8rem; }
+  #transcript-title { flex: 1; font-size: 1.2rem; color: var(--accent); }
+  #transcript-text { overflow: auto; white-space: pre-wrap; font-size: 1.35rem; line-height: 1.5; }
+  #document-overlay {
+    position: fixed; inset: 0; z-index: 10; padding: 3rem;
+    background: var(--overlay); display: flex;
+    align-items: center; justify-content: center;
+  }
+  #document-overlay[hidden] { display: none; }
+  #document-overlay .panel {
+    width: min(1100px, 100%); max-height: 100%; display: flex; flex-direction: column;
+    background: var(--panel); border: 2px solid var(--line); border-radius: .8rem; padding: 1.2rem;
+  }
+  #document-overlay .head { display: flex; align-items: center; gap: 1rem; margin-bottom: .8rem; }
+  #document-title { flex: 1; font-size: 1.2rem; color: var(--accent); }
+  #document-list { overflow: auto; display: flex; flex-direction: column; gap: .6rem; }
+  .doc-link {
+    display: flex; align-items: center; gap: 1rem; padding: .9rem 1.1rem;
+    font-size: 1.2rem; text-decoration: none;
+    background: var(--control); color: var(--fg);
+    border: 1px solid var(--control-border); border-radius: .6rem;
+  }
+  .doc-link:hover { background: var(--control-hover); }
+  .doc-link .icon { font-size: 1.5rem; }
+  .doc-link .meta { color: var(--muted); font-size: .95rem; }
+  button {
+    font: inherit; font-size: .95rem; padding: .35rem .9rem;
+    border: 1px solid var(--control-border); border-radius: .5rem;
+    background: var(--control); color: var(--fg); cursor: pointer;
+  }
+  button:hover { background: var(--control-hover); }
+  button:disabled { opacity: .45; cursor: default; }
+  #btn-theme { white-space: nowrap; }
+  main {
+    display: grid; grid-template-columns: 1.15fr 1fr 1fr;
+    gap: 1px; flex: 1; min-height: 0; background: var(--line);
+  }
+  section { background: var(--bg); padding: 1rem 1.3rem; overflow: hidden; display: flex; flex-direction: column; }
+  h2 {
+    font-size: 1rem; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--muted); margin: 0 0 .8rem; border-bottom: 1px solid var(--line); padding-bottom: .5rem;
+  }
+  #sottotitoli { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: .55rem; overflow: hidden; }
+  #partiale { font-size: 2.1rem; line-height: 1.25; color: var(--accent); min-height: 2.6rem; }
+  .seg { font-size: 2.1rem; line-height: 1.25; opacity: .55; }
+  .seg.recent { opacity: 1; }
+  .seg .t { font-size: 1rem; color: var(--muted); margin-right: .6rem; }
+  #riassunto { font-size: 1.35rem; line-height: 1.4; overflow-y: auto; }
+  #mappa { flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; }
+  #mappa svg { max-width: 100%; max-height: 100%; }
+  #mappa pre { font-size: .95rem; white-space: pre-wrap; color: var(--muted); }
+  ul { margin: .3rem 0 1.2rem; padding-left: 1.3rem; font-size: 1.2rem; line-height: 1.35; }
+  li { margin-bottom: .45rem; }
+  #destra { overflow-y: auto; }
+  .azioni { width: 100%; border-collapse: collapse; font-size: 1.05rem; }
+  .azioni td, .azioni th { border-bottom: 1px solid var(--line); padding: .35rem .4rem; text-align: left; vertical-align: top; }
+  .argomento { margin-bottom: .9rem; }
+  .argomento h3 { font-size: 1.15rem; margin: 0 0 .25rem; color: var(--accent); }
+  #log { font-size: .85rem; color: var(--muted); margin-top: auto; max-height: 5rem; overflow: hidden; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Registratore riunioni</h1>
+  <button id="btn-theme" title="Passa dal tema scuro al tema chiaro">☀ Chiaro</button>
+  <span class="pill" id="meeting">—</span>
+  <span class="pill" id="timer">00:00</span>
+  <span class="pill" id="lag">lag —</span>
+  <span class="pill" id="status">idle</span>
+  <button id="btn-start">Avvia</button>
+  <button id="btn-stop" disabled>Ferma e salva</button>
+</header>
+
+<nav id="menu">
+  <details class="menu" id="menu-base">
+    <summary>▾ Riunioni base <span class="count" id="count-base">0</span></summary>
+    <div class="menu-list" id="list-base"></div>
+  </details>
+  <details class="menu" id="menu-accurate">
+    <summary>▾ Accurate <span class="count" id="count-accurate">0</span></summary>
+    <div class="menu-list" id="list-accurate"></div>
+  </details>
+  <details class="menu" id="menu-docs">
+    <summary>▾ Documenti <span class="count" id="count-docs">0</span></summary>
+    <div class="menu-list" id="list-docs"></div>
+  </details>
+</nav>
+
+<div id="archivio">
+  <label>Selezionata</label>
+  <span class="pill" id="selected-meeting">—</span>
+  <button id="btn-transcript" disabled>Mostra trascrizione</button>
+  <button id="btn-documents" disabled>Mostra documenti</button>
+  <button id="btn-finalize" disabled>Genera documenti</button>
+  <button id="btn-accurate" disabled>Ritrascrizione accurata</button>
+  <span id="job"></span>
+</div>
+
+<main>
+  <section>
+    <h2>Sottotitoli live</h2>
+    <div id="sottotitoli"></div>
+    <div id="partiale"></div>
+  </section>
+  <section>
+    <h2>Mappa / argomenti</h2>
+    <div id="mappa"><pre id="mappa-codice">In attesa dell'LLM…</pre></div>
+    <h2 style="margin-top:1rem">Riassunto</h2>
+    <div id="riassunto">—</div>
+  </section>
+  <section id="destra">
+    <h2>Decisioni</h2><ul id="decisioni"><li>—</li></ul>
+    <h2>Azioni</h2><div id="azioni"></div>
+    <h2>Argomenti</h2><div id="argomenti"></div>
+    <div id="log"></div>
+  </section>
+</main>
+
+<div id="transcript-overlay" hidden>
+  <div class="panel">
+    <div class="head">
+      <span id="transcript-title">Trascrizione</span>
+      <button id="btn-close-transcript">Chiudi</button>
+    </div>
+    <pre id="transcript-text"></pre>
+  </div>
+</div>
+
+<div id="document-overlay" hidden>
+  <div class="panel">
+    <div class="head">
+      <span id="document-title">Documenti</span>
+      <button id="btn-doc-accurate">Ritrascrivi accurata</button>
+      <button id="btn-close-documents">Chiudi</button>
+    </div>
+    <div id="document-list"></div>
+  </div>
+</div>
+
+<script src="/static/vendor/mermaid.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+let mermaidReady = false;
+let lastMap = "";
+const subtitleLimit = 4;
+let elapsedBase = 0;
+let elapsedClock = Date.now();
+let meetings = [];
+let meetingListSignature = "";
+let currentMeetingId = null;
+let currentStatus = {};
+
+let activeTheme = "dark";
+try {
+  activeTheme = localStorage.getItem("riunioni-theme") === "light" ? "light" : "dark";
+} catch (e) { /* localStorage puo' essere bloccato: resta il tema scuro */ }
+mermaidReady = !!(window.mermaid);
+
+function applyTheme(name) {
+  activeTheme = name === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = activeTheme;
+  try { localStorage.setItem("riunioni-theme", activeTheme); } catch (e) {}
+  const btn = $("btn-theme");
+  if (btn) {
+    btn.textContent = activeTheme === "dark" ? "☀ Chiaro" : "☾ Scuro";
+    btn.title = activeTheme === "dark" ? "Passa al tema chiaro" : "Passa al tema scuro";
+  }
+  if (mermaidReady) {
+    try {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: activeTheme === "dark" ? "dark" : "neutral",
+        securityLevel: "loose",
+      });
+    } catch (e) { console.warn("Tema Mermaid non applicabile", e); }
+  }
+  // I colori SVG della mappa dipendono dal tema: forza un nuovo render.
+  lastMap = "";
+  const r = currentStatus.result || {};
+  const mapCode = r.mindmap_mermaid || r.flusso_mermaid || "";
+  if (mapCode) renderMap(mapCode);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+}
+
+// HH:MM:SS con soli interi: niente decimali e minuti che arrivano a 60.
+function fmtHMS(total) {
+  const t = Math.max(0, Math.floor(total));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = t % 60;
+  return [h, m, s].map(v => String(v).padStart(2, "0")).join(":");
+}
+
+function renderSegments(segments) {
+  const box = $("sottotitoli");
+  const slice = segments.slice(-subtitleLimit);
+  box.innerHTML = slice.map((s, i) => {
+    const m = Math.floor(s.t / 60), sec = Math.floor(s.t % 60);
+    const cls = i === slice.length - 1 ? "seg recent" : "seg";
+    return `<div class="${cls}"><span class="t">${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}</span>${escapeHtml(s.text)}</div>`;
+  }).join("");
+}
+
+async function renderMap(code) {
+  if (!code || code === lastMap) return;
+  lastMap = code;
+  const box = $("mappa");
+  if (!mermaidReady) {
+    box.innerHTML = `<pre>${escapeHtml(code)}</pre>`;
+    return;
+  }
+  try {
+    const { svg } = await mermaid.render("mappa-live-" + Date.now(), code);
+    box.innerHTML = svg;
+  } catch (e) {
+    box.innerHTML = `<pre>${escapeHtml(code)}</pre>`;
+  }
+}
+
+function renderResult(result) {
+  $("riassunto").textContent = result.riassunto || "—";
+  $("decisioni").innerHTML = (result.decisioni || []).length
+    ? result.decisioni.map(d => `<li>${escapeHtml(d)}</li>`).join("")
+    : "<li>—</li>";
+
+  $("azioni").innerHTML = (result.azioni || []).length
+    ? `<table class="azioni"><tr><th>Cosa</th><th>Chi</th><th>Scadenza</th></tr>` +
+      result.azioni.map(a => {
+        const o = typeof a === "string" ? {cosa: a} : a;
+        return `<tr><td>${escapeHtml(o.cosa||"")}</td><td>${escapeHtml(o.chi||"")}</td><td>${escapeHtml(o.scadenza||"")}</td></tr>`;
+      }).join("") + `</table>`
+    : "";
+
+  $("argomenti").innerHTML = (result.argomenti || []).map(a => {
+    if (typeof a === "string") return `<div class="argomento"><h3>${escapeHtml(a)}</h3></div>`;
+    return `<div class="argomento"><h3>${escapeHtml(a.titolo||"")}</h3><ul>` +
+      (a.punti||[]).map(p => `<li>${escapeHtml(p)}</li>`).join("") + `</ul></div>`;
+  }).join("");
+
+  renderMap(result.mindmap_mermaid || result.flusso_mermaid || "");
+}
+
+function renderJobs(jobs) {
+  const box = $("job");
+  const active = (jobs || []).find(j => j.status === "in corso");
+  if (!active) {
+    const failed = (jobs || []).find(j => j.status === "errore");
+    box.textContent = failed ? "ultimo lavoro: errore" : "";
+    box.className = failed ? "err" : "";
+    return;
+  }
+  const line = (active.log || []).slice(-1)[0] || "";
+  box.textContent = `${active.kind === "accurate" ? "Ritrascrizione" : "Documenti"}: ${line}`;
+  box.className = "";
+}
+
+function selectedMeeting() {
+  return currentMeetingId;
+}
+
+function selectedMeetingInfo() {
+  return currentMeetingId
+    ? meetings.find(m => m.meeting_id === currentMeetingId) || null
+    : null;
+}
+
+// Stima leggibile, identica a format_stima() sul server.
+function fmtStima(seconds) {
+  const t = Math.max(1, Math.round(seconds || 0));
+  const min = Math.floor(t / 60), sec = t % 60;
+  if (!min) return `circa ${sec} s`;
+  if (!sec) return `circa ${min} min`;
+  return `circa ${min} min ${sec} s`;
+}
+
+function updateArchiveButtons() {
+  const info = selectedMeetingInfo();
+  const live = currentStatus.status === "live";
+  const busy = (currentStatus.jobs || []).some(j => j.status === "in corso");
+  const chosen = !!currentMeetingId;
+  const docs = (info?.documents || []).length > 0;
+  $("selected-meeting").textContent = info ? meetingLabel(info) : "—";
+  $("btn-transcript").disabled = !chosen;
+  $("btn-documents").disabled = !chosen || !docs;
+  $("btn-finalize").disabled = live || busy || !chosen;
+  $("btn-accurate").disabled = live || busy || !chosen;
+  document.querySelectorAll(".menu .menu-item").forEach(el => {
+    el.classList.toggle("selected", el.dataset.id === currentMeetingId);
+  });
+}
+
+function meetingLabel(m) {
+  // I vecchi id senza ":" vengono mostrati comunque in forma leggibile.
+  return m.meeting_id.replace(/^(\d{8})-(\d{2})(\d{2})(\d{2})$/, "$1-$2:$3:$4");
+}
+
+// Tre menu separati: base (solo live), accurate (Whisper), documenti (file generati).
+// Una riunione puo' comparire in piu' menu: e' utile poterla ritrovare in entrambi.
+const menuDefs = [
+  {
+    key: "base", list: "list-base", count: "count-base",
+    filter: m => !m.has_accurate && !(m.documents || []).length,
+    meta: m => `live · audio ${fmtHMS(m.duration_seconds)}`,
+  },
+  {
+    key: "accurate", list: "list-accurate", count: "count-accurate",
+    filter: m => m.has_accurate,
+    meta: m => `Whisper · ${fmtStima(m.accurate_estimate_seconds)}`,
+  },
+  {
+    key: "docs", list: "list-docs", count: "count-docs",
+    filter: m => (m.documents || []).length > 0,
+    meta: m => `${m.documents.length} file generati`,
+  },
+];
+
+function selectMeeting(id, kind) {
+  currentMeetingId = id;
+  document.querySelectorAll("#menu details").forEach(d => { d.open = false; });
+  updateArchiveButtons();
+  if (kind === "docs") showDocuments();
+  else showTranscript();
+}
+
+function renderMeetings() {
+  const signature = JSON.stringify(meetings.map(m => [
+    m.meeting_id, m.has_accurate, m.documents.length, m.duration_seconds,
+  ]));
+  // Ricostruire i menu ogni 4 secondi faceva perdere la voce mentre era aperta.
+  if (signature !== meetingListSignature) {
+    meetingListSignature = signature;
+    for (const def of menuDefs) {
+      const items = meetings.filter(def.filter);
+      $(def.count).textContent = items.length;
+      $(def.list).innerHTML = items.length
+        ? items.map(m =>
+            `<button class="menu-item" data-id="${escapeHtml(m.meeting_id)}" data-kind="${def.key}">` +
+            `${escapeHtml(meetingLabel(m))}<span class="meta">${escapeHtml(def.meta(m))}</span></button>`
+          ).join("")
+        : `<div class="menu-empty">Nessuna riunione in questa categoria.</div>`;
+    }
+  }
+  updateArchiveButtons();
+}
+
+async function loadMeetings() {
+  try {
+    const data = await (await fetch("/api/meetings")).json();
+    meetings = data.meetings || [];
+    renderMeetings();
+  } catch (e) { console.warn("caricamento riunioni fallito", e); }
+}
+
+function applyState(s) {
+  currentStatus = s || {};
+  $("meeting").textContent = s.meeting_id || "—";
+  const st = $("status");
+  st.textContent = s.status || "idle";
+  st.className = "pill" + (s.status === "live" ? " live" : "") + (String(s.status).startsWith("errore") ? " err" : "");
+  // Il server invia i secondi gia' interi calcolati con orologio monotonico:
+  // niente Date.now()/started_at, che sbagliava dopo sospensioni e produceva decimali.
+  elapsedBase = Math.floor(s.elapsed_seconds ?? 0);
+  elapsedClock = Date.now();
+  $("timer").textContent = fmtHMS(elapsedBase);
+  const lag = $("lag");
+  const lagValue = Math.round(s.last_lag ?? 0);
+  lag.textContent = `lag ${lagValue}s · drop ${s.dropped ?? 0}`;
+  lag.className = "pill" + (lagValue > 5 ? " err" : "");
+  renderSegments(s.segments || []);
+  $("partiale").textContent = s.partial || "";
+  if (s.result && Object.keys(s.result).length) renderResult(s.result);
+  $("log").innerHTML = (s.log || []).slice(-4).map(escapeHtml).join("<br>");
+  renderJobs(s.jobs || []);
+  $("btn-start").disabled = s.status === "live";
+  $("btn-stop").disabled = s.status !== "live";
+  if (s.meeting_id && !currentMeetingId) currentMeetingId = s.meeting_id;
+  updateArchiveButtons();
+}
+
+async function postJson(path, body) {
+  try {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body || {}),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      alert(data.error || `Errore ${response.status}`);
+    } else {
+      await loadMeetings();
+    }
+  } catch (e) { alert(String(e)); }
+}
+
+$("btn-theme").onclick = () => applyTheme(activeTheme === "dark" ? "light" : "dark");
+$("btn-start").onclick = () => postJson("/api/start");
+$("btn-stop").onclick = () => {
+  if (confirm("Fermare la registrazione e salvare audio + trascrizione? I documenti si generano dopo.")) {
+    postJson("/api/stop");
+  }
+};
+async function showTranscript() {
+  const id = selectedMeeting();
+  if (!id) return;
+  try {
+    const response = await fetch(`/api/transcript?meeting_id=${encodeURIComponent(id)}`);
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      alert(data.error || `Errore ${response.status}`);
+      return;
+    }
+    $("transcript-title").textContent =
+      `Trascrizione ${id} · ${data.accurata ? "accurata (Whisper)" : "live (Vosk)"}`;
+    $("transcript-text").textContent = data.trascrizione || "(trascrizione vuota)";
+    $("transcript-overlay").hidden = false;
+  } catch (e) { alert(String(e)); }
+}
+function docIcon(name) {
+  const ext = name.split(".").pop().toLowerCase();
+  return ({pdf: "📕", docx: "📘", md: "📝", json: "🧾", svg: "🗺️", png: "🖼️"})[ext] || "📄";
+}
+
+function showDocuments() {
+  const info = selectedMeetingInfo();
+  if (!info) return;
+  const id = info.meeting_id;
+  const files = info.documents || [];
+  $("document-title").textContent = `Documenti · ${id}`;
+  $("document-list").innerHTML = files.length
+    ? files.map(path => {
+        const name = path.split("/").pop();
+        const href = `/api/document?meeting_id=${encodeURIComponent(id)}&file=${encodeURIComponent(path)}`;
+        return `<a class="doc-link" href="${href}" target="_blank" rel="noopener">` +
+               `<span class="icon">${docIcon(name)}</span><span>${escapeHtml(name)}</span>` +
+               `<span class="meta">${escapeHtml(path)}</span></a>`;
+      }).join("")
+    : "<p>Nessun documento generato per questa riunione.</p>";
+  $("document-overlay").hidden = false;
+}
+
+$("btn-transcript").onclick = showTranscript;
+$("btn-close-transcript").onclick = () => { $("transcript-overlay").hidden = true; };
+$("btn-documents").onclick = showDocuments;
+$("btn-close-documents").onclick = () => { $("document-overlay").hidden = true; };
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    $("transcript-overlay").hidden = true;
+    $("document-overlay").hidden = true;
+  }
+});
+
+$("btn-finalize").onclick = () => {
+  const id = selectedMeeting();
+  if (id && confirm(`Generare i documenti di ${id}?`)) {
+    postJson("/api/finalize", {meeting_id: id});
+  }
+};
+$("btn-accurate").onclick = () => {
+  const id = selectedMeeting();
+  const info = selectedMeetingInfo();
+  if (!id) return;
+  const stima = fmtStima(info?.accurate_estimate_seconds);
+  if (confirm(`Ritrascrivere ${id} con Whisper? Tempo stimato: ${stima}.`)) {
+    postJson("/api/finalize-accurate", {meeting_id: id});
+  }
+};
+// Delegazione sugli elementi dei menu: restano validi dopo ogni aggiornamento.
+$("menu").addEventListener("click", (e) => {
+  const item = e.target.closest(".menu-item");
+  if (item) selectMeeting(item.dataset.id, item.dataset.kind);
+});
+// Un menu aperto alla volta.
+document.querySelectorAll("#menu details").forEach(d => {
+  d.addEventListener("toggle", () => {
+    if (!d.open) return;
+    document.querySelectorAll("#menu details").forEach(other => {
+      if (other !== d) other.open = false;
+    });
+  });
+});
+$("btn-doc-accurate").onclick = () => { $("document-overlay").hidden = true; $("btn-accurate").click(); };
+
+setInterval(() => {
+  // Avanza solo durante la registrazione; il valore base arriva dal server.
+  if (currentStatus.status !== "live") return;
+  const elapsed = elapsedBase + (Date.now() - elapsedClock) / 1000;
+  $("timer").textContent = fmtHMS(elapsed);
+}, 1000);
+
+const proto = location.protocol === "https:" ? "wss:" : "ws:";
+const ws = new WebSocket(`${proto}//${location.host}/ws`);
+ws.onmessage = (ev) => {
+  const msg = JSON.parse(ev.data);
+  if (msg.type === "state") applyState(msg.data);
+  else if (msg.type === "segment") {
+    fetch("/api/status").then(r => r.json()).then(applyState);
+  } else if (msg.type === "partial") {
+    $("partiale").textContent = msg.text;
+  } else if (msg.type === "result") renderResult(msg.data);
+  else if (msg.type === "jobs") renderJobs(msg.data);
+};
+ws.onclose = () => { $("status").textContent = "connessione persa"; };
+
+// Ricarica periodica: aggiorna i lavori in background e ritrova il server
+// anche dopo un riavvio del PC, quando il WebSocket non viene riconnesso.
+setInterval(() => {
+  fetch("/api/status").then(r => r.json()).then(applyState).catch(() => {});
+  loadMeetings();
+}, 4000);
+
+applyTheme(activeTheme);
+fetch("/api/status").then(r => r.json()).then(applyState);
+loadMeetings();
+</script>
+</body>
+</html>

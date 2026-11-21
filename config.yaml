@@ -1,0 +1,62 @@
+# Configurazione del registratore AI per riunioni.
+# Le variabili d'ambiente RIUNIONI_* sovrascrivono i valori qui sotto.
+
+audio:
+  sample_rate: 16000
+  channels: 1
+  device: null            # null = dispositivo di default; es. "hw:2,0" per un mic USB
+  chunk_seconds: 1.0      # blocco di cattura e scrittura su disco
+  list_devices_on_start: true
+
+stt_live:
+  engine: vosk            # vosk = streaming a bassa latenza; faster_whisper = a chunk
+  vosk_model: models/vosk-model-it-0.22     # grande: piu' accurato (~2 GB RAM, 7-9 s di carico)
+  # vosk_model: models/vosk-model-small-it-0.22   # alternativa leggera: 48 MB, 1 s, meno accurata
+  model: base             # usato solo se engine: faster_whisper
+  compute_type: int8
+  cpu_threads: 4
+  chunk_seconds: 3.0      # blocco audio trascritto una sola volta
+  overlap_seconds: 0.75   # sovrapposizione per non tagliare le parole
+  vad_filter: true
+  beam_size: 1
+  language: it
+
+stt_final:
+  model: medium           # medium / large-v3, usato a riunione conclusa
+  compute_type: int8
+  cpu_threads: 4
+  beam_size: 5
+  language: it
+
+llm:
+  # Endpoint compatibile OpenAI. Esempi:
+  #   base_url: "http://192.168.1.4:8080/v1"
+  #   api_key: "qualcosa"
+  #   models: ["modello-1", "modello-2"]   # retry in ordine
+  # Se base_url e' vuoto l'LLM resta disattivato: i sottotitoli funzionano lo stesso.
+  base_url: ""
+  api_key: ""
+  models: []
+  interval_seconds: 25
+  timeout_seconds: 45
+  glossary: |
+    Davide, Marco, OmniRoute, CiaTop, Proxmox, Syncthing, Whisper,
+    faster-whisper, Mermaid, Markmap, HDMI, microfono MEMS, beamforming.
+
+display:
+  host: 127.0.0.1
+  port: 8000
+  subtitle_lines: 4
+
+finalization:
+  # "Ferma e salva" non genera nulla: i documenti si fanno dopo, anche offline.
+  render_diagrams: false          # true = SVG/PNG con npx (serve internet la prima volta)
+  accurate_render_diagrams: true  # dopo la ritrascrizione accurata i diagrammi si fanno
+  accurate_model: null            # null = usa stt_final.model (medium)
+  # Stima tempo per la ritrascrizione accurata, tarata su questa CPU:
+  # secondi stimati = durata_audio * accurate_speed_factor + accurate_overhead_seconds
+  accurate_speed_factor: 1.3      # ~1,3x il tempo reale (misurato su questo hardware)
+  accurate_overhead_seconds: 10   # carico del modello + avvio/finalizzazione
+
+paths:
+  output_dir: output
