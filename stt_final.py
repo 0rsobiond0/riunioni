@@ -1,8 +1,8 @@
-"""Ritrascrizione di qualita' sull'audio grezzo, a riunione conclusa.
+"""High-quality re-transcription of the raw audio, after the meeting ends.
 
-Padre del documento finale: il testo prodotto qui sovrascrive quello live.
-Il modello grande puo' impiegare diversi minuti su questa CPU: e' un lavoro
-offline, non fa parte del percorso critico della riunione.
+Source of the final document: the text produced here overwrites the live one.
+The large model can take several minutes on this CPU: it's an offline
+job, not part of the meeting's critical path.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ def read_wav_16k(path: Path) -> tuple[np.ndarray, int]:
         width = handle.getsampwidth()
         raw = handle.readframes(handle.getnframes())
     if width != 2:
-        raise ValueError(f"ampiezza campione non supportata: {width} byte")
+        raise ValueError(f"unsupported sample width: {width} bytes")
     audio = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
     if channels > 1:
         audio = audio.reshape(-1, channels).mean(axis=1)
@@ -39,7 +39,7 @@ def transcribe_final(meeting_dir: Path, cfg: dict[str, Any]) -> dict[str, Any]:
     meeting_dir = Path(meeting_dir)
     audio_path = meeting_dir / "audio.wav"
     if not audio_path.exists():
-        raise FileNotFoundError(f"manca {audio_path}")
+        raise FileNotFoundError(f"missing {audio_path}")
 
     stt = cfg["stt_final"]
     audio, rate = read_wav_16k(audio_path)
@@ -82,10 +82,10 @@ def transcribe_final(meeting_dir: Path, cfg: dict[str, Any]) -> dict[str, Any]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Ritrascrizione accurata + finalizzazione")
+    parser = argparse.ArgumentParser(description="Accurate transcription (documents are a separate step)")
     parser.add_argument("--meeting", required=True)
-    parser.add_argument("--model", default=None, help="sovrascrive stt_final.model")
-    parser.add_argument("--no-finalize", action="store_true")
+    parser.add_argument("--model", default=None, help="overrides stt_final.model")
+    parser.add_argument("--finalize", action="store_true", help="also generate documents afterwards")
     parser.add_argument("--no-diagrams", action="store_true")
     parser.add_argument("--config", default=None)
     args = parser.parse_args()
@@ -95,9 +95,9 @@ def main() -> None:
         cfg["stt_final"]["model"] = args.model
 
     payload = transcribe_final(Path(args.meeting), cfg)
-    print(f"Trascritti {len(payload['segments'])} segmenti da {payload['duration']}s di audio")
+    print(f"Transcribed {len(payload['segments'])} segments from {payload['duration']}s of audio")
 
-    if not args.no_finalize:
+    if args.finalize:
         from finalize import finalize
 
         manifest = finalize(Path(args.meeting), cfg, not args.no_diagrams)

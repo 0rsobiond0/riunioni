@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Misura il fattore di velocita' dei modelli faster-whisper su CPU.
+"""Measures the speed factor of faster-whisper models on CPU.
 
-Uso:
+Usage:
     python tests/benchmark_stt.py tests/test_5min_16k.wav
 
-Stampa per ogni modello: tempo di caricamento, tempo di trascrizione,
-durata audio e rapporto tempo_trascrizione / durata_audio.
-Un rapporto < 1 significa che il modello puo' reggere il live.
+Prints for each model: loading time, transcription time,
+audio duration and transcription_time / audio_duration ratio.
+A ratio < 1 means the model can keep up with live transcription.
 """
 
 import sys
@@ -44,10 +44,10 @@ def main() -> None:
 
         ratio = transcribe_s / info.duration if info.duration else 0.0
         print(
-            f"{name:6s} beam={beam} | carico {load_s:5.1f}s | "
-            f"trascrizione {transcribe_s:6.1f}s / {info.duration:6.1f}s audio "
-            f"= {ratio:4.2f}x | {n_segments} segmenti "
-            f"{'[LIVE OK]' if ratio < 1 else '[TROPO LENTO PER LIVE]'}",
+            f"{name:6s} beam={beam} | load {load_s:5.1f}s | "
+            f"transcription {transcribe_s:6.1f}s / {info.duration:6.1f}s audio "
+            f"= {ratio:4.2f}x | {n_segments} segments "
+            f"{'[LIVE OK]' if ratio < 1 else '[TOO SLOW FOR LIVE]'}",
             flush=True,
         )
         del model

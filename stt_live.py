@@ -1,9 +1,9 @@
-"""Trascrizione live con faster-whisper a chunk sequenziali.
+"""Live transcription with faster-whisper using sequential chunks.
 
-Ogni blocco di pochi secondi viene trascritto una sola volta (con un piccolo
-overlap per non tagliare le parole) e il testo viene emesso subito. Rispetto
-alla finestra scorrevole ritrascritta più volte, così il carico è prevedibile
-e il ritardo non cresce nel tempo.
+Each block of a few seconds is transcribed once (with a small
+overlap to avoid cutting words) and the text is emitted immediately. Compared
+to a sliding window re-transcribed multiple times, this keeps the load predictable
+and the delay from growing over time.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ class LiveTranscriber:
         self.segment_count = 0
 
     def warmup(self) -> None:
-        """Carica il modello prima di aprire il microfono: niente coda iniziale."""
+        """Loads the model before opening the microphone: no initial queue."""
         from faster_whisper import WhisperModel
 
         stt = self.cfg["stt_live"]
@@ -52,7 +52,7 @@ class LiveTranscriber:
             cpu_threads=int(stt["cpu_threads"]),
         )
         self.state.add_log(
-            f"STT pronto: {stt['model']} in {time.perf_counter() - t0:.1f}s"
+            f"STT ready: {stt['model']} in {time.perf_counter() - t0:.1f}s"
         )
 
     def start(self) -> None:
@@ -65,7 +65,7 @@ class LiveTranscriber:
 
     @staticmethod
     def _strip_overlap(previous: str, current: str) -> str:
-        """Rimuove il testo ripetuto fra due chunk consecutivi."""
+        """Removes repeated text between two consecutive chunks."""
         if not previous:
             return current
         if current in previous:
@@ -88,7 +88,7 @@ class LiveTranscriber:
 
         glossary = self.cfg["llm"].get("glossary", "").strip().replace("\n", " ")
         buffer = np.empty(0, dtype=np.float32)
-        timeline = 0  # indice di campione assoluto dell'inizio di buffer
+        timeline = 0  # absolute sample index of the start of the buffer
 
         while not self.stop_event.is_set():
             try:
@@ -114,7 +114,7 @@ class LiveTranscriber:
                     texts = [" ".join(seg.text.split()) for seg in segments]
                     texts = [text for text in texts if text]
                 except Exception as exc:
-                    self.state.add_log(f"STT errore trascrizione: {exc}")
+                    self.state.add_log(f"STT transcription error: {exc}")
                     texts = []
 
                 combined = " ".join(texts).strip()
@@ -123,20 +123,20 @@ class LiveTranscriber:
                     self._last_text = (self._last_text + " " + emitted).strip()[-800:]
                     if self.state.add_segment(abs_start_s, emitted):
                         self.segment_count += 1
-                        # Ritardo percepito: quanto tempo e' passato davvero
-                        # dalla fine del parlato a quando compare il testo.
+                        # Perceived lag: how much time really passed
+                        # from the end of speech to when the text appears.
                         lag = max(0.0, self.state.audio_elapsed() - abs_end_s)
                         self.state.set_lag(lag)
                         if self.segment_count <= 5:
                             self.state.add_log(
-                                f"Latenza chunk {self.segment_count}: {lag:.2f}s"
+                                f"Chunk latency {self.segment_count}: {lag:.2f}s"
                             )
                         self.on_segment({"t": round(abs_start_s, 1), "text": emitted})
 
                 buffer = buffer[advance:]
                 timeline += advance
 
-        self.state.add_log(f"STT fermato: {self.segment_count} chunk emessi")
+        self.state.add_log(f"STT stopped: {self.segment_count} chunks emitted")
 
     def stop(self) -> None:
         self.stop_event.set()
@@ -146,11 +146,11 @@ class LiveTranscriber:
 
 
 class VoskTranscriber:
-    """STT streaming a bassa latenza: adatto a CPU vecchie e cariche.
+    """Low-latency streaming STT: suitable for old and loaded CPUs.
 
-    I partial arrivano mentre si parla (~0,3 s), i finali poco dopo la fine
-    della frase. La qualita' e' inferiore a Whisper, ma i sottotitoli live
-    restano sincronizzati; il documento finale usa la ritrascrizione Whisper.
+    Partials arrive while speaking (~0.3 s), finals shortly after the end
+    of the sentence. Quality is lower than Whisper, but live subtitles
+    stay in sync; the final document uses the Whisper re-transcription.
     """
 
     def __init__(
@@ -182,14 +182,14 @@ class VoskTranscriber:
         if not model_path.is_absolute():
             model_path = Path(self.cfg["_root"]) / model_path
         if not model_path.exists():
-            raise FileNotFoundError(f"modello Vosk mancante: {model_path}")
+            raise FileNotFoundError(f"Vosk model missing: {model_path}")
 
         t0 = time.perf_counter()
         self.model = Model(str(model_path))
         self.recognizer = KaldiRecognizer(self.model, int(self.cfg["audio"]["sample_rate"]))
         self.recognizer.SetWords(True)
         self.state.add_log(
-            f"Vosk pronto: {model_path.name} in {time.perf_counter() - t0:.1f}s"
+            f"Vosk ready: {model_path.name} in {time.perf_counter() - t0:.1f}s"
         )
 
     def start(self) -> None:
@@ -205,7 +205,7 @@ class VoskTranscriber:
 
         assert self.recognizer is not None
         sr = int(self.cfg["audio"]["sample_rate"])
-        piece = max(1, int(0.2 * sr))  # 200 ms: partial fluidi senza affannare la CPU
+        piece = max(1, int(0.2 * sr))  # 200 ms: smooth partials without overworking the CPU
         total_samples = 0
         last_partial = ""
 
@@ -234,7 +234,7 @@ class VoskTranscriber:
                             if self.state.add_segment(start_s, text):
                                 self.segment_count += 1
                                 if self.segment_count <= 5:
-                                    self.state.add_log(f"Latenza frase {self.segment_count}: {lag:.2f}s")
+                                    self.state.add_log(f"Sentence latency {self.segment_count}: {lag:.2f}s")
                                 self.on_segment({"t": round(start_s, 1), "text": text})
                         last_partial = ""
                     else:
@@ -249,11 +249,11 @@ class VoskTranscriber:
                             if self.on_partial is not None:
                                 self.on_partial(partial)
                 except Exception as exc:
-                    self.state.add_log(f"Vosk errore: {exc}")
+                    self.state.add_log(f"Vosk error: {exc}")
 
             total_samples += len(data)
 
-        self.state.add_log(f"Vosk fermato: {self.segment_count} frasi")
+        self.state.add_log(f"Vosk stopped: {self.segment_count} sentences")
 
     def stop(self) -> None:
         self.stop_event.set()

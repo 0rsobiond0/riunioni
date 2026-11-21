@@ -1,4 +1,4 @@
-"""Caricamento configurazione con override via variabili d'ambiente."""
+"""Configuration loading with overrides via environment variables."""
 
 from __future__ import annotations
 
@@ -32,12 +32,12 @@ def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_config(path: str | Path | None = None) -> dict[str, Any]:
-    """Legge config.yaml e applica gli override RIUNIONI_* presenti nell'ambiente."""
+    """Reads config.yaml and applies RIUNIONI_* overrides present in the environment."""
     config_path = Path(path) if path else DEFAULT_CONFIG
     with config_path.open(encoding="utf-8") as handle:
         cfg: dict[str, Any] = yaml.safe_load(handle) or {}
 
-    # Precedenza: variabile d'ambiente reale > file .env > config.yaml
+    # Precedence: real environment variable > .env file > config.yaml
     env_file = ROOT / ".env"
     file_values: dict[str, str | None] = {}
     if env_file.exists():

@@ -1,7 +1,7 @@
-"""Cattura audio dal microfono e salvataggio del WAV grezzo.
+"""Audio capture from the microphone and saving of the raw WAV.
 
-Il WAV grezzo e' sempre scritto: e' il piano B che permette di ritrascrivere
-tutto a fine riunione con un modello piu' accurato.
+The raw WAV is always written: it's the backup plan that makes it possible
+to transcribe everything at the end of the meeting with a more accurate model.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from state import MeetingState
 
 
 def list_input_devices() -> list[str]:
-    """Elenca i dispositivi di ingresso disponibili (utile per scegliere il mic USB)."""
+    """Lists available input devices (useful for choosing the USB mic)."""
     try:
         import sounddevice as sd
 
@@ -26,12 +26,12 @@ def list_input_devices() -> list[str]:
             if device["max_input_channels"] > 0:
                 lines.append(
                     f"{index}: {device['name']} "
-                    f"(ingressi={device['max_input_channels']}, "
+                    f"(inputs={device['max_input_channels']}, "
                     f"sr={int(device['default_samplerate'])})"
                 )
         return lines
-    except Exception as exc:  # PortAudio non disponibile
-        return [f"Errore enumerazione dispositivi: {exc}"]
+    except Exception as exc:  # PortAudio unavailable
+        return [f"Device enumeration error: {exc}"]
 
 
 class AudioCapture:
@@ -73,7 +73,7 @@ class AudioCapture:
             1, int(self._sample_rate * float(self.cfg["audio"]["chunk_seconds"]))
         )
         self.state.add_log(
-            f"Cattura avviata: device={device or 'default'}, "
+            f"Capture started: device={device or 'default'}, "
             f"sr={self._sample_rate}, block={blocksize}"
         )
 
@@ -98,7 +98,7 @@ class AudioCapture:
             try:
                 self.wave_file.writeframes(pcm.tobytes())
             except Exception as exc:
-                self.state.add_log(f"Errore scrittura WAV: {exc}")
+                self.state.add_log(f"WAV write error: {exc}")
 
         try:
             self.queue.put_nowait(samples.copy())
@@ -113,16 +113,16 @@ class AudioCapture:
                 self.stream.stop()
                 self.stream.close()
             except Exception as exc:
-                self.state.add_log(f"Errore chiusura stream: {exc}")
+                self.state.add_log(f"Stream close error: {exc}")
             self.stream = None
 
         if self.wave_file is not None:
             try:
                 self.wave_file.close()
             except Exception as exc:
-                self.state.add_log(f"Errore chiusura WAV: {exc}")
+                self.state.add_log(f"WAV close error: {exc}")
             self.wave_file = None
 
         self.state.add_log(
-            f"Cattura terminata: {self.blocks} blocchi, {self.dropped} scartati"
+            f"Capture finished: {self.blocks} blocks, {self.dropped} dropped"
         )

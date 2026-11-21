@@ -1,7 +1,7 @@
-"""Stato condiviso della riunione, thread-safe.
+"""Thread-safe shared meeting state.
 
-I worker (cattura, STT, LLM) girano su thread diversi; il server FastAPI
-legge snapshot per WebSocket e API. Tutta la mutazione passa da qui.
+Workers (capture, STT, LLM) run on different threads; the FastAPI server
+reads snapshots for WebSocket and API. All mutation goes through here.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Any
 
 
 def format_timestamp(seconds: float) -> str:
-    """MM:SS senza decimali e senza minuti da 60 (00:60 -> 01:00)."""
+    """MM:SS without decimals and without minutes over 60 (00:60 -> 01:00)."""
     minutes, secs = divmod(max(0, int(seconds)), 60)
     return f"{minutes:02d}:{secs:02d}"
 
@@ -28,7 +28,7 @@ class MeetingState:
     segments: list[dict[str, Any]] = field(default_factory=list)
     result: dict[str, Any] = field(default_factory=dict)
     status: str = "idle"
-    llm_status: str = "non configurato"
+    llm_status: str = "not configured"
     log: list[str] = field(default_factory=list)
     output_dir: str = ""
     last_lag: float = 0.0
@@ -58,11 +58,11 @@ class MeetingState:
             return " ".join(seg["text"] for seg in self.segments)
 
     def mark_audio_start(self) -> None:
-        """Il tempo dell'audio parte quando parte la cattura, non prima del warmup."""
+        """Audio time starts when capture starts, not before warmup."""
         with self._lock:
             self.audio_started_at = time.time()
-            # Monotonico: se il PC va in sospensione o l'orologio si sposta,
-            # il ritardo percepito resta quello dell'audio, non dell'orologio.
+            # Monotonic: if the PC goes to sleep or the clock shifts,
+            # the perceived lag stays that of the audio, not of the clock.
             self.audio_started_monotonic = time.monotonic()
 
     def audio_elapsed(self) -> float:
@@ -71,7 +71,7 @@ class MeetingState:
         return max(0.0, time.monotonic() - start)
 
     def elapsed_seconds(self) -> int:
-        """Secondi interi di registrazione, stabili anche se l'orologio salta."""
+        """Whole seconds of recording, stable even if the clock jumps."""
         return int(self.audio_elapsed())
 
     def set_lag(self, lag: float) -> None:

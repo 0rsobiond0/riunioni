@@ -1,251 +1,229 @@
-# Registratore AI per riunioni
+# AI Recorder for Meetings
 
-Implementazione del progetto descritto in `~/Scaricati/progetto-ai-recorder-riunioni.md`.
-Portatile in sede collegato alla TV via HDMI, LLM opzionale, documenti preparati
-in locale e inviati a mano via WhatsApp (human in the loop).
+A local, portable meeting recorder: live Italian subtitles on an external display,
+deferred high-quality transcription, and final documents generated locally and
+shared manually by a person (human in the loop). No subscription is required, and
+the core workflow works without internet access.
 
-## Hardware rilevato
+## Features
 
-- Intel **i3-4030U** @ 1,9 GHz, 2 core / 4 thread, **AVX2 presente**
-- Intel Haswell-ULT integrata (nessuna GPU per inferenza)
-- 8 GB RAM, Fedora 44 KDE
-- Microfono analogico interno + presa per mic USB (da collegare al momento dell'uso)
+- Live subtitles through Vosk streaming speech recognition.
+- Accurate, delayed transcription through Whisper / faster-whisper.
+- Optional OpenAI-compatible LLM for structured minutes; disabled by default.
+- PDF, DOCX, Markdown, and Mermaid diagrams, each generated only when requested.
+- A browser-based display page designed for a second screen or TV.
+- Saved meetings remain available after a reboot, so transcription and document
+  generation can be done independently at any later time.
 
-## Installazione (Fedora, senza sudo)
+## Installation
+
+From the project directory:
 
 ```bash
-cd ~/riunioni
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
-`av` è fissato a 18.1.1: la 19.x ha rimosso un argomento ancora usato da
-`faster-whisper` 1.2.1. `mermaid.min.js` è già in `static/vendor/`, quindi la
-mappa live funziona anche senza internet.
+`av` is pinned to 18.1.1 because 19.x removed an argument still used by
+`faster-whisper` 1.2.1. `mermaid.min.js` is bundled in `static/vendor/`, so the
+live map works even without internet.
 
-Sono disponibili due modelli Vosk italiani, già scaricati ed estratti in `models/`:
+Italian Vosk models are not included in the repository (they are too large).
+Download a model from the Vosk model list and extract it into `models/`:
 
-- `vosk-model-it-0.22` — **default**, 2 GB su disco, ~2,1 GB di RAM, 7-9 s di
-  carico prima di aprire il microfono, 0,35x in elaborazione;
-- `vosk-model-small-it-0.22` — 48 MB, ~1 s di carico, 0,10x, ma meno accurato.
+- `vosk-model-it-0.22` — recommended default, higher accuracy;
+- `vosk-model-small-it-0.22` — lighter and faster to load, but less accurate.
 
-Per passare a quello leggero basta decommentare la riga `vosk_model` piccola in
-`config.yaml`. Il modello viene caricato sempre prima di avviare la cattura,
-quindi quei secondi non finiscono nella trascrizione.
+To use the lightweight model, uncomment the corresponding `vosk_model` line in
+`config.yaml`. The model is loaded before capture starts, so loading time does
+not end up in the transcript.
 
-## Avvio
+## Startup
 
 ```bash
-cd ~/riunioni
 .venv/bin/python server.py
 ```
 
-Sul PC apri <http://localhost:8000/display>, trascina la finestra sul display
-HDMI e mettila a schermo intero (`F11`).
+Open <http://localhost:8000/display> in a browser, move the window to the
+external display, and switch to fullscreen (`F11`).
 
-- **Barra in alto**: pulsante `☀ Chiaro` / `☾ Scuro` per passare dal tema scuro
-  a quello bianco tenue (scelta ricordata dal browser), poi `Avvia` e
-  `Ferma e salva`. Quest'ultima chiude soltanto la registrazione: salva
-  `audio.wav`, `riunione.json` e `trascrizione.txt` e basta.
-- **Tre menu a tendina** sotto la barra in alto, per tenere tutto separato:
-  - `Riunioni base` — solo audio e trascrizione live (Vosk);
-  - `Accurate` — riunioni con trascrizione Whisper, con la stima del tempo;
-  - `Documenti` — riunioni con file generati (PDF/DOCX/Markdown/diagrammi).
+- **Top bar**: a `Light` / `Dark` theme toggle (remembered by the browser), then
+  `Start` and `Stop and save`. Stopping only ends the recording and saves
+  `audio.wav`, `riunione.json`, and `trascrizione.txt` — nothing else.
+- **Three dropdown menus**, placed below the top bar so each workflow stays
+  separate:
+  - `Base meetings` — audio and live transcription only (Vosk);
+  - `Accurate` — meetings with Whisper transcription, with a time estimate;
+  - `Documents` — meetings with generated files (PDF/DOCX/Markdown/diagrams).
 
-  Una riunione può comparire in più menu: per esempio una con trascrizione
-  accurata e documenti si trova sia in `Accurate` sia in `Documenti`.
-  Cliccando una voce si seleziona la riunione e si apre subito il pannello
-  corrispondente (trascrizione per `base`/`Accurate`, documenti per `Documenti`).
-- **Barra azioni** (sempre sopra i pannelli, quindi i pulsanti restano cliccabili
-  anche mentre si legge una trascrizione o si sfogliano i documenti): la
-  riunione selezionata, `Mostra trascrizione`, `Mostra documenti`,
-  `Genera documenti` e `Ritrascrizione accurata`. Quest'ultima funziona anche su
-  riunioni passate che hanno già i documenti: Whisper riscrive
-  `trascrizione.txt`/`.json` e rigenera i file. Nel viewer documenti c'è anche
-  un pulsante `Ritrascrivi accurata` diretto. La stima del tempo è calcolata
-  sulla durata dell'audio, per esempio `circa 1 min 31 s` (non un generico
-  «qualche minuto»), e appare sia nel confermare l'operazione sia nello stato
-  del lavoro. La trascrizione si può leggere anche a terminale con
-  `cat output/<id>/trascrizione.txt`.
+  A meeting can appear in more than one menu: for example, a meeting that has
+  both an accurate transcript and documents appears in `Accurate` and in
+  `Documents`. Selecting an item opens the corresponding panel immediately
+  (the transcript for `Base meetings`/`Accurate`, the documents for `Documents`).
+- **Action bar**: above the dropdown menus, with the selected meeting,
+  `Show transcript`, `Show documents`, `Generate all documents`, and
+  `Accurate transcription`.
+- **Viewers**: the transcript and document panels are full-screen overlays above
+  the bars, with a `Close` button (or `Esc`) that is always clickable. The
+  document viewer has separate buttons — `Generate Markdown`, `Generate PDF`,
+  `Generate DOCX`, `Generate diagrams` — so only the requested file type is
+  produced when clicked.
 
-Gli id delle riunioni mostrano l'orario leggibile: `AAAAMMGG-HH:MM:SS`
-(per esempio `20261121-19:00:27`). Le cartelle create prima di questa
-modifica sono state rinominate nello stesso formato.
+### Transcription and documents are separate actions
 
-Entrambe le generazioni funzionano **dopo il riavvio del PC**, anche senza che
-sia in corso una riunione, e non richiedono internet (tranne il primo download
-di `npx`/Chromium per i diagrammi). È il punto in cui chiudi il pc in sede e
-prepari i file a casa. Se spegni il PC mentre un lavoro è in corso, lo stato
-del lavoro si perde: rilancia semplicemente il pulsante (i file già salvati
-restano intatti).
+- `Accurate transcription` runs Whisper on the saved audio and rewrites only
+  `trascrizione.txt` / `trascrizione.json`. It also keeps the original live
+  transcript as `trascrizione-live.txt`. It **never** generates or deletes
+  documents, and it works on past meetings even if documents already exist.
+- `Generate Markdown` / `Generate PDF` / `Generate DOCX` / `Generate diagrams`
+  produce only that file type from the current transcript and JSON. Nothing is
+  generated automatically: use the buttons in the document viewer, or
+  `Generate all documents` in the action bar to create every type at once.
+  Both can be run at any time, before or after an accurate transcription.
 
-Api utili:
+Both actions work after a restart, with no meeting in progress, and offline
+(except for the first `npx`/Chromium download for diagrams). If the machine is
+shut down while a job is running, the job status is lost: simply run the action
+again — already saved files remain intact.
 
-| Metodo | Endpoint | Azione |
+The time estimate shown before an accurate transcription is computed as
+`audio_duration × accurate_speed_factor + accurate_overhead_seconds`, for
+example `about 1 min 31 s`. Both parameters are in `config.yaml` under
+`finalization` (defaults `1.3` and `10`). Since it is an average rate, treat it
+as an indication: system load and model size can make it vary.
+
+Meeting IDs use a readable timestamp, `YYYYMMDD-HH:MM:SS` (for example
+`20261121-19:00:27`). Older folders were renamed to the same format.
+
+## API
+
+| Method | Endpoint | Action |
 |---|---|---|
-| GET | `/health` | controllo rapido che il server risponda |
-| GET | `/api/status` | stato corrente + lavori in background |
-| GET | `/api/meetings` | elenco riunioni salvate e documenti presenti |
-| GET | `/api/jobs` | stato dei lavori di finalizzazione |
-| GET | `/api/transcript?meeting_id=…` | testo della trascrizione salvata |
-| GET | `/api/document?meeting_id=…&file=…` | apre/scarica un documento generato |
-| GET | `/api/devices` | elenco microfoni (per scegliere il dispositivo USB) |
-| POST | `/api/start` | inizia cattura + STT live + LLM |
-| POST | `/api/stop` | ferma tutto e salva audio + JSON + trascrizione (senza documenti) |
-| POST | `/api/finalize` | genera i documenti di `meeting_id` (o dell'ultima riunione) |
-| POST | `/api/finalize-accurate` | ritrascrizione Whisper + documenti finali |
+| GET | `/health` | quick check that the server responds |
+| GET | `/api/status` | current status + background jobs |
+| GET | `/api/meetings` | saved meetings, durations, estimates, documents |
+| GET | `/api/jobs` | status of background jobs |
+| GET | `/api/transcript?meeting_id=…` | text of the saved transcript |
+| GET | `/api/document?meeting_id=…&file=…` | open/download a generated document |
+| GET | `/api/devices` | list microphones |
+| POST | `/api/start` | start capture + live STT + optional LLM |
+| POST | `/api/stop` | save audio + JSON + transcript (no documents) |
+| POST | `/api/finalize` | generate all document types for a meeting |
+| POST | `/api/generate-document` | generate one document type (`kind`: `md`, `pdf`, `docx`, `diagrams`) |
+| POST | `/api/transcribe-accurate` | Whisper transcription only |
+| POST | `/api/finalize-accurate` | backwards-compatible alias of the above |
 
-Gli ultimi due accettano un corpo JSON opzionale, per esempio:
+These POST endpoints accept an optional JSON body:
 
 ```bash
+curl -X POST -H 'Content-Type: application/json' \
+  -d '{"meeting_id":"20261121-17:27:52","kind":"pdf"}' \
+  http://localhost:8000/api/generate-document
+
 curl -X POST -H 'Content-Type: application/json' \
   -d '{"meeting_id":"20261121-17:27:52"}' \
   http://localhost:8000/api/finalize
 
 curl -X POST -H 'Content-Type: application/json' \
-  -d '{"meeting_id":"20261121-17:27:52","model":"medium","accurate_render_diagrams":true}' \
-  http://localhost:8000/api/finalize-accurate
+  -d '{"meeting_id":"20261121-17:27:52","model":"medium"}' \
+  http://localhost:8000/api/transcribe-accurate
 ```
 
-Equivalente da terminale per elencare i microfoni: `.venv/bin/python list_mics.py`.
+To list microphones from a terminal: `.venv/bin/python list_mics.py`.
 
-## Configurazione
+## Configuration
 
-Tutto in `config.yaml`. Override rapidi via ambiente:
+Everything is configured in `config.yaml`. Quick overrides via environment:
 
 ```bash
-export RIUNIONI_LLM_BASE_URL="http://192.168.1.4:8080/v1"
-export RIUNIONI_LLM_API_KEY="chiave"
-export RIUNIONI_LLM_MODELS="modello-1,modello-2"   # retry in ordine
-export RIUNIONI_AUDIO_DEVICE="hw:2,0"              # mic USB
+export RIUNIONI_LLM_BASE_URL="http://localhost:8080/v1"
+export RIUNIONI_LLM_API_KEY="your-api-key"
+export RIUNIONI_LLM_MODELS="model-1,model-2"   # retry in order
+export RIUNIONI_AUDIO_DEVICE="hw:2,0"          # example USB mic
 .venv/bin/python server.py
 ```
 
-In alternativa copia `.env.example` in `.env` e compilalo: le variabili
-vengono lette automaticamente all'avvio (precedenza: ambiente > `.env` > yaml).
+Alternatively, copy `.env.example` to `.env` and fill it in: variables are read
+automatically at startup (precedence: environment > `.env` > YAML).
 
-Se `base_url` o `models` sono vuoti l'LLM resta disattivato: **i sottotitoli
-continuano a funzionare**, e a fine riunione i documenti contengono la
-trascrizione con un riassunto segnaposto. Il sistema è pensato per funzionare
-senza internet in sede.
+If `base_url` or `models` are empty, the LLM stays disabled: **subtitles keep
+working**, and the generated documents contain the transcript with a placeholder
+summary.
 
-## Dopo la riunione
+## Output files
 
-`output/<AAAAMMGG-HH:MM:SS>` contiene subito dopo `Ferma e salva`:
+`output/<YYYYMMDD-HH:MM:SS>` contains, right after `Stop and save`:
 
-- `audio.wav` — grezzo, sempre salvato
-- `riunione.json` — verbale strutturato (rigenerabile senza rifare l'IA)
-- `trascrizione.txt` — live
+- `audio.wav` — raw recording, always saved;
+- `riunione.json` — structured minutes (regenerable without re-running the AI);
+- `trascrizione.txt` — live transcript.
 
-Dopo `Genera documenti` / `Ritrascrizione accurata` compaiono anche:
+After `Accurate transcription`:
 
-- `trascrizione.json` — segmenti Whisper con timestamp, solo dopo la ritrascrizione
-- `trascrizione.txt` — sostituita da quella accurata
-- `documenti/verbale.pdf`, `verbale.docx`, `verbale.md`, `mappa-mentale.*`, `flusso.*`
+- `trascrizione.json` — Whisper segments with timestamps;
+- `trascrizione.txt` — replaced by the accurate version;
+- `trascrizione-live.txt` — copy of the original live transcript.
 
-Se riavvii il PC, il selettore nella barra «Riunione salvata» ritrova tutte le
-riunioni con `audio.wav`: non serve tenere aperta la riunione live.
+After `Generate documents`:
 
-Per la qualità alta, anche da riga di comando:
+- `documenti/verbale.pdf`, `verbale.docx`, `verbale.md`, `mappa-mentale.*`, `flusso.*`.
+
+Saved meetings are discovered automatically from folders containing `audio.wav`,
+so there is no need to keep the live session open to work on them later.
+
+For accurate transcription from the command line:
 
 ```bash
-.venv/bin/python stt_final.py --meeting output/20261121-163000 --model medium
+.venv/bin/python stt_final.py --meeting output/20261121-16:30:00 --model medium
 ```
 
-I diagrammi Mermaid vengono renderizzati in SVG/PNG tramite `npx` (serve
-internet la prima volta); senza `npx` restano i `.mmd`, apribili in qualsiasi
-editor Mermaid. I file finiti vengono presi e inviati manualmente via WhatsApp
-da una persona: nessuna automazione di invio o pagina pubblica.
+This rewrites the transcript only. Add `--finalize` to also generate documents.
 
-## Test e benchmark
+Mermaid diagrams are rendered to SVG/PNG via `npx` (internet needed the first
+time); without `npx`, the `.mmd` files remain and can be opened in any Mermaid
+editor. A person collects the finished files and sends them manually, for
+example via WhatsApp: no sending automation or public page.
+
+## Tests and benchmarks
 
 ```bash
 .venv/bin/python tests/benchmark_stt.py tests/test_5min_16k.wav
 ```
 
-Il campione è italiano sintetico generato con `espeak-ng`: serve a confrontare
-i modelli, **non** a sostituire una prova con audio di microfono reale.
+The sample is synthetic Italian generated with `espeak-ng`: it compares models
+on the same audio and does not replace a test with real microphone audio.
 
-Risultati su 330 s di audio (i3-4030U, 4 thread, int8):
+Live subtitles use **Vosk streaming** because short Whisper chunks have high and
+irregular latency, which makes the subtitle lag grow over time. Vosk emits
+partial results quickly and confirmed sentences shortly after each sentence
+ends. The final document always uses the Whisper re-transcription, not the live
+subtitles, regardless of the live model.
 
-| Modello | Tempo | Fattore | Uso |
-|---|---|---|---|
-| tiny beam5 | 85,8 s | 0,26x | confronto |
-| base beam5 | 90,9 s | 0,28x | confronto |
-| base beam1 | 64,7 s | 0,20x | confronto |
-| small beam5 | 220,2 s | 0,67x | confronto |
+Model weights are downloaded on first use and then cached locally. Generation
+speed depends on the machine, the model size, and the system load; the estimate
+in `/api/meetings` is based on the configured factors in `config.yaml`.
 
-### Sottotitoli live: perché Vosk
-
-Quei numeri sembrano compatibili con il live, ma su chunk da 3 s il costo di
-ogni chiamata a Whisper è alto e irregular: 2,8-5 s per 3 s di audio, con il
-lag che cresceva da 14,6 s a 22,2 s in 45 s di prova. Su questa CPU (i3-4030U,
-spesso caricata da WhatsApp/plasma-discover) faster-whisper a chunk **non sta
-in sincronizzazione**.
-
-Il motore live predefinito è quindi **Vosk streaming**, che emette partial in
-~0,3 s e frasi confermate poco dopo la fine della frase. Con il modello small e
-microfono interno: 15 frasi in 120 s, lag 2,0-3,2 s, zero chunk scartati.
-
-Confronto sui tuoi 120 s di voce reale (offline, stesso audio):
-
-| Modello | Carico | Elaborazione | Esempi |
-|---|---|---|---|
-| Vosk small | 1,1 s | 11,8 s (0,10x) | «più accurata», «parlare violento», frase ripetuta 1 volta |
-| Vosk grande | 8,4 s | 41,9 s (0,35x) | «più accurato», «più lento io» ripetuta 2 volte |
-| Whisper medium | 7,6 s | ~118 s (1,0x) | testo migliore in assoluto |
-
-Il modello grande resta comoda in tempo reale (nessun accumulo, lag ~0 s
-nell'iniezione a tempo reale) ed è quello impostato come default. Ha costi di
-RAM e avvio superiori. Qualunque sia il modello live, il documento finale usa
-sempre la ritrascrizione Whisper `medium`, non i sottotitoli live.
-
-Nota: il lag mostrato in `/display` usa un orologio monotonico, quindi non salta
-se il PC va in sospensione o l'orologio di sistema viene corretto.
-
-### Trascrizione accurata (a riunione finita)
-
-Misurata su 60 s di audio, modello già in cache:
-
-| Modello | Caricamento | Trascrizione | Per 1 h di riunione |
-|---|---|---|---|
-| `small` | ~pochi s | 0,67x | ~40 min |
-| `medium` (default) | 7,6 s | 1,78x | ~1 h 47 min |
-
-Il primo download di `medium` è ~1,5 GB (nella nostra rete ha richiesto ~24 min),
-poi resta in `~/.cache/huggingface`. Se il turnaround conta, usa
-`--model small`; se vuoi la massima qualità puoi lanciare `medium` e lasciarlo
-lavorare, oppure eseguirlo sul server di casa.
-
-La stima mostrata prima di avviare la ritrascrizione è
-`durata_audio × accurate_speed_factor + accurate_overhead_seconds`, con i due
-parametri in `config.yaml` sotto `finalization` (valori predefiniti `1.3` e
-`10`). Essendo un rate medio, va presa come indicazione: il carico del PC e la
-dimensione del modello possono farla variare. `/api/meetings` restituisce per
-ogni riunione `duration_seconds`, `transcript_chars` e
-`accurate_estimate_seconds`.
-
-Il rendering Mermaid in SVG/PNG tramite `npx` è stato verificato: la prima
-volta scarica Chromium, poi riusa la cache.
+The lag displayed in `/display` uses a monotonic clock, so it does not jump if
+the machine sleeps or the system clock is corrected.
 
 ## Privacy
 
-In Italia è lecito registrare una conversazione a cui si partecipa, ma
-diffonderla richiede il consenso dei partecipanti: avvisa sempre all'inizio
-della riunione che stai registrando e che il verbale verrà condiviso. Poiché
-l'invio è manuale, il controllo finale resta in capo a chi invia il file.
+Recording laws vary by jurisdiction. Always announce at the start of a meeting
+that it is being recorded, and obtain participants' consent before sharing the
+minutes. Because sharing is manual, final control stays with the person sending
+the files.
 
-## Stato dei task
+## Task status
 
-- [x] Test CPU/AVX2 e benchmark modelli
-- [x] Cattura audio + WAV grezzo
-- [x] STT live streaming via Vosk + WebSocket
-- [x] Server FastAPI + pagina `/display`
-- [x] Finalizzazione differita (documenti generabili dopo un riavvio, anche offline)
-- [x] LLM loop opzionale con retry e degradazione elegante
-- [x] Display con mappa, decisioni e azioni
-- [x] Finalizzazione PDF/DOCX/Markdown/Mermaid
-- [x] Ritrascrizione accurata
-- [x] Visualizzatore documenti cliccabile + stima tempo ritrascrizione
-- [ ] Configurazione mic USB fisico e prova in sala con microfono reale
-- [ ] Prova end-to-end con riunione vera
+- [x] Model benchmarks and tests
+- [x] Audio capture to raw WAV
+- [x] Live streaming STT via Vosk + WebSocket
+- [x] FastAPI server + `/display` page
+- [x] Deferred generation: transcription and documents are independent actions
+- [x] Optional LLM loop with retry and graceful degradation
+- [x] Display with map, decisions, and actions
+- [x] PDF/DOCX/Markdown/Mermaid document generation
+- [x] Accurate re-transcription without touching existing documents
+- [x] Clickable document viewer + re-transcription time estimate
+- [ ] USB microphone setup and on-site test with a real microphone
+- [ ] End-to-end test with a real meeting

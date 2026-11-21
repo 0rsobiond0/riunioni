@@ -1,7 +1,7 @@
-"""Aggiornamento periodico del verbale tramite endpoint OpenAI-compatible.
+"""Periodic update of the meeting minutes via an OpenAI-compatible endpoint.
 
-L'LLM e' opzionale: se non e' configurato o non risponde, i sottotitoli
-continuano a funzionare e il loop si limita a registrare lo stato d'errore.
+The LLM is optional: if it's not configured or doesn't respond, subtitles
+keep working and the loop just records the error state.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ LIST_KEYS = {"partecipanti", "decisioni", "azioni", "argomenti"}
 
 
 def extract_json(raw: str) -> dict[str, Any]:
-    """Tollera code fence e testo accidentale attorno al JSON."""
+    """Tolerates code fences and stray text around the JSON."""
     text = raw.strip()
     if text.startswith("```"):
         text = text.split("```", 2)[1]
@@ -36,15 +36,15 @@ def extract_json(raw: str) -> dict[str, Any]:
             text = text.lstrip()[4:]
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end <= start:
-        raise ValueError("nessun oggetto JSON trovato nella risposta")
+        raise ValueError("no JSON object found in the response")
     data = json.loads(text[start : end + 1])
     if not isinstance(data, dict):
-        raise ValueError("la risposta non e' un oggetto JSON")
+        raise ValueError("the response is not a JSON object")
     return data
 
 
 def normalize(data: dict[str, Any]) -> dict[str, Any]:
-    """Garantisce lo schema atteso anche se il modello omette qualche chiave."""
+    """Ensures the expected schema even if the model omits some keys."""
     out: dict[str, Any] = {}
     for key, default in REQUIRED_KEYS.items():
         value = data.get(key, default)
@@ -79,7 +79,7 @@ class LLMLoop:
 
     def start(self) -> None:
         if not self.enabled:
-            self.state.set_llm_status("disattivato (base_url o modelli mancanti)")
+            self.state.set_llm_status("disabled (missing base_url or models)")
             return
         from openai import OpenAI
 
@@ -90,7 +90,7 @@ class LLMLoop:
             timeout=float(llm.get("timeout_seconds", 45)),
             max_retries=0,
         )
-        self.state.set_llm_status(f"attivo: {', '.join(llm['models'])}")
+        self.state.set_llm_status(f"active: {', '.join(llm['models'])}")
         self.stop_event.clear()
         self.thread = threading.Thread(target=self._run, daemon=True, name="llm")
         self.thread.start()
@@ -98,22 +98,22 @@ class LLMLoop:
     def _prompt(self, new_text: str, previous: dict[str, Any]) -> str:
         llm = self.cfg["llm"]
         return (
-            "Sei un assistente che produce verbali di riunioni. "
-            "Rispondi SOLO con un oggetto JSON valido, senza markdown né commenti.\n"
-            "Schema obbligatorio:\n"
+            "You are an assistant that produces meeting minutes. "
+            "Respond ONLY with a valid JSON object, no markdown or comments.\n"
+            "Required schema:\n"
             + json.dumps(REQUIRED_KEYS, ensure_ascii=False)
-            + "\n\nGlossario di nomi e termini (usalo per correggere la trascrizione):\n"
-            + (llm.get("glossary") or "(vuoto)")
-            + "\n\nRiassunto precedente (aggiornalo, non ricominciare da zero):\n"
+            + "\n\nGlossary of names and terms (use it to correct the transcript):\n"
+            + (llm.get("glossary") or "(empty)")
+            + "\n\nPrevious summary (update it, don't start from scratch):\n"
             + json.dumps(previous, ensure_ascii=False)[:6000]
-            + "\n\nTrascrizione nuova da integrare:\n"
+            + "\n\nNew transcript to integrate:\n"
             + new_text[:12000]
         )
 
     def _call_model(self, model: str, prompt: str) -> dict[str, Any]:
         assert self._client is not None
         messages = [
-            {"role": "system", "content": "Rispondi esclusivamente con JSON valido."},
+            {"role": "system", "content": "Respond exclusively with valid JSON."},
             {"role": "user", "content": prompt},
         ]
         try:
@@ -123,7 +123,7 @@ class LLMLoop:
                 response_format={"type": "json_object"},
             )
         except Exception:
-            # alcuni endpoint compatibili non accettano response_format
+            # some compatible endpoints don't accept response_format
             response = self._client.chat.completions.create(model=model, messages=messages)
         content = response.choices[0].message.content or ""
         return normalize(extract_json(content))
@@ -157,7 +157,7 @@ class LLMLoop:
                     self.state.add_log(f"LLM retry: {last_error}")
 
             if last_error:
-                self.state.set_llm_status(f"errore (sottotitoli attivi) · {last_error[:120]}")
+                self.state.set_llm_status(f"error (subtitles active) · {last_error[:120]}")
 
     def stop(self) -> None:
         self.stop_event.set()
@@ -166,7 +166,7 @@ class LLMLoop:
             self.thread = None
 
     def refresh_now(self) -> None:
-        """Forza un aggiornamento immediato (utile prima della finalizzazione)."""
+        """Forces an immediate update (useful before finalization)."""
         if not self.enabled or self.thread is None:
             return
         snapshot = self.state.snapshot()
@@ -180,4 +180,4 @@ class LLMLoop:
             self.state.set_result(result)
             self.on_result(result)
         except Exception as exc:
-            self.state.add_log(f"LLM refresh finale fallito: {exc}")
+            self.state.add_log(f"Final LLM refresh failed: {exc}")

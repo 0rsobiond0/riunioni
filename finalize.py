@@ -1,7 +1,7 @@
-"""Generazione dei documenti finali a partire da riunione.json + trascrizione.
+"""Generation of final documents from riunione.json + transcript.
 
-Nessuna chiamata LLM: tutto nasce dal JSON gia' validato, cosi' e' possibile
-rigenerare i file con nuovi template senza rifare l'IA.
+No LLM calls: everything comes from the already validated JSON, so it's possible
+to regenerate files with new templates without redoing the AI work.
 """
 
 from __future__ import annotations
@@ -20,21 +20,21 @@ from config import load_config
 
 
 def meeting_markdown(result: dict[str, Any], transcript: str) -> str:
-    lines = [f"# {result.get('titolo') or 'Verbale di riunione'}", ""]
+    lines = [f"# {result.get('titolo') or 'Meeting minutes'}", ""]
     if result.get("data"):
-        lines += [f"**Data:** {result['data']}", ""]
+        lines += [f"**Date:** {result['data']}", ""]
     if result.get("partecipanti"):
-        lines += ["**Partecipanti:** " + ", ".join(result["partecipanti"]), ""]
+        lines += ["**Participants:** " + ", ".join(result["partecipanti"]), ""]
 
-    lines += ["## Riassunto", "", str(result.get("riassunto") or "(non disponibile)"), ""]
+    lines += ["## Summary", "", str(result.get("riassunto") or "(unavailable)"), ""]
 
     if result.get("decisioni"):
-        lines += ["## Decisioni", ""]
+        lines += ["## Decisions", ""]
         lines += [f"- {item}" for item in result["decisioni"]]
         lines += [""]
 
     if result.get("azioni"):
-        lines += ["## Azioni", "", "| Cosa | Chi | Scadenza |", "|---|---|---|"]
+        lines += ["## Actions", "", "| What | Who | Deadline |", "|---|---|---|"]
         for action in result["azioni"]:
             if isinstance(action, dict):
                 cells = [
@@ -48,7 +48,7 @@ def meeting_markdown(result: dict[str, Any], transcript: str) -> str:
         lines += [""]
 
     if result.get("argomenti"):
-        lines += ["## Argomenti", ""]
+        lines += ["## Topics", ""]
         for topic in result["argomenti"]:
             if isinstance(topic, dict):
                 lines.append(f"### {topic.get('titolo', '')}")
@@ -59,12 +59,12 @@ def meeting_markdown(result: dict[str, Any], transcript: str) -> str:
             lines += [""]
 
     if result.get("mindmap_mermaid"):
-        lines += ["## Mappa mentale", "", "```mermaid", result["mindmap_mermaid"], "```", ""]
+        lines += ["## Mind map", "", "```mermaid", result["mindmap_mermaid"], "```", ""]
     if result.get("flusso_mermaid"):
-        lines += ["## Schema / flusso", "", "```mermaid", result["flusso_mermaid"], "```", ""]
+        lines += ["## Diagram / flow", "", "```mermaid", result["flusso_mermaid"], "```", ""]
 
     if transcript:
-        lines += ["## Trascrizione completa", "", transcript, ""]
+        lines += ["## Full transcript", "", transcript, ""]
     return "\n".join(lines)
 
 
@@ -76,7 +76,7 @@ def render_pdf(result: dict[str, Any], transcript: str, out_dir: Path, root: Pat
         autoescape=select_autoescape(["html"]),
     )
     html = env.get_template("riunione.html").render(
-        titolo=result.get("titolo") or "Verbale di riunione",
+        titolo=result.get("titolo") or "Meeting minutes",
         data=result.get("data", ""),
         partecipanti=result.get("partecipanti", []),
         riassunto=result.get("riassunto", ""),
@@ -92,25 +92,25 @@ def render_pdf(result: dict[str, Any], transcript: str, out_dir: Path, root: Pat
 
 def render_docx(result: dict[str, Any], transcript: str, out_dir: Path) -> Path:
     doc = Document()
-    doc.add_heading(result.get("titolo") or "Verbale di riunione", 0)
+    doc.add_heading(result.get("titolo") or "Meeting minutes", 0)
     if result.get("data"):
-        doc.add_paragraph(f"Data: {result['data']}")
+        doc.add_paragraph(f"Date: {result['data']}")
     if result.get("partecipanti"):
-        doc.add_paragraph("Partecipanti: " + ", ".join(result["partecipanti"]))
+        doc.add_paragraph("Participants: " + ", ".join(result["partecipanti"]))
 
-    doc.add_heading("Riassunto", level=1)
-    doc.add_paragraph(str(result.get("riassunto") or "(non disponibile)"))
+    doc.add_heading("Summary", level=1)
+    doc.add_paragraph(str(result.get("riassunto") or "(unavailable)"))
 
     if result.get("decisioni"):
-        doc.add_heading("Decisioni", level=1)
+        doc.add_heading("Decisions", level=1)
         for item in result["decisioni"]:
             doc.add_paragraph(str(item), style="List Bullet")
 
     if result.get("azioni"):
-        doc.add_heading("Azioni", level=1)
+        doc.add_heading("Actions", level=1)
         table = doc.add_table(rows=1, cols=3)
         table.style = "Light Grid Accent 1"
-        for cell, label in zip(table.rows[0].cells, ["Cosa", "Chi", "Scadenza"]):
+        for cell, label in zip(table.rows[0].cells, ["What", "Who", "Deadline"]):
             cell.text = label
         for action in result["azioni"]:
             cells = table.add_row().cells
@@ -121,7 +121,7 @@ def render_docx(result: dict[str, Any], transcript: str, out_dir: Path) -> Path:
                 cells[0].text = str(action)
 
     if result.get("argomenti"):
-        doc.add_heading("Argomenti", level=1)
+        doc.add_heading("Topics", level=1)
         for topic in result["argomenti"]:
             if isinstance(topic, dict):
                 doc.add_heading(str(topic.get("titolo", "")), level=2)
@@ -131,15 +131,15 @@ def render_docx(result: dict[str, Any], transcript: str, out_dir: Path) -> Path:
                 doc.add_paragraph(str(topic), style="List Bullet")
 
     if result.get("mindmap_mermaid"):
-        doc.add_heading("Mappa mentale (codice Mermaid)", level=1)
+        doc.add_heading("Mind map (Mermaid code)", level=1)
         doc.add_paragraph(str(result["mindmap_mermaid"]))
     if result.get("flusso_mermaid"):
-        doc.add_heading("Schema / flusso (codice Mermaid)", level=1)
+        doc.add_heading("Diagram / flow (Mermaid code)", level=1)
         doc.add_paragraph(str(result["flusso_mermaid"]))
 
     if transcript:
         doc.add_page_break()
-        doc.add_heading("Trascrizione completa", level=1)
+        doc.add_heading("Full transcript", level=1)
         doc.add_paragraph(transcript)
 
     path = out_dir / "verbale.docx"
@@ -148,7 +148,7 @@ def render_docx(result: dict[str, Any], transcript: str, out_dir: Path) -> Path:
 
 
 def render_mermaid(result: dict[str, Any], out_dir: Path, enabled: bool = True) -> list[Path]:
-    """Scrive sempre i .mmd; prova a renderizzare SVG/PNG con mermaid-cli via npx."""
+    """Always writes the .mmd files; tries to render SVG/PNG with mermaid-cli via npx."""
     sources = {
         "mappa-mentale": result.get("mindmap_mermaid", ""),
         "flusso": result.get("flusso_mermaid", ""),
@@ -176,43 +176,93 @@ def render_mermaid(result: dict[str, Any], out_dir: Path, enabled: bool = True) 
                 )
                 paths.append(target)
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-                # Il .mmd resta: si puo' renderizzare dopo con mermaid-cli o in un editor.
+                # The .mmd remains: it can be rendered later with mermaid-cli or in an editor.
                 break
     return paths
 
 
-def finalize(meeting_dir: Path, cfg: dict[str, Any], render_diagrams: bool = True) -> dict[str, Any]:
-    meeting_dir = Path(meeting_dir)
+DOCUMENT_KINDS = ("md", "pdf", "docx", "diagrams", "mindmap", "flusso")
+
+
+def _load_sources(meeting_dir: Path) -> tuple[dict[str, Any], str]:
     result_path = meeting_dir / "riunione.json"
     if not result_path.exists():
-        raise FileNotFoundError(f"manca {result_path}")
-
+        raise FileNotFoundError(f"missing {result_path}")
     result: dict[str, Any] = json.loads(result_path.read_text(encoding="utf-8"))
     transcript_path = meeting_dir / "trascrizione.txt"
     transcript = transcript_path.read_text(encoding="utf-8") if transcript_path.exists() else ""
+    return result, transcript
 
+
+def _update_manifest(meeting_dir: Path, paths: list[Path]) -> dict[str, Any]:
+    """Adds the generated files to the manifest without dropping previous entries."""
     out_dir = meeting_dir / "documenti"
     out_dir.mkdir(parents=True, exist_ok=True)
-    root = Path(cfg["_root"])
-
-    markdown = meeting_markdown(result, transcript)
-    md_path = out_dir / "verbale.md"
-    md_path.write_text(markdown, encoding="utf-8")
-
-    created = [md_path, render_pdf(result, transcript, out_dir, root), render_docx(result, transcript, out_dir)]
-    created += render_mermaid(result, out_dir, render_diagrams)
-
-    manifest = {"documenti": [str(p.relative_to(meeting_dir)) for p in created if p.exists()]}
-    (out_dir / "manifest.json").write_text(
+    manifest_path = out_dir / "manifest.json"
+    manifest: dict[str, Any] = {"documenti": []}
+    if manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (ValueError, TypeError):
+            manifest = {"documenti": []}
+    known = set(manifest.get("documenti", []))
+    for path in paths:
+        if not path.exists():
+            continue
+        rel = str(path.relative_to(meeting_dir))
+        if rel not in known:
+            manifest.setdefault("documenti", []).append(rel)
+            known.add(rel)
+    manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     return manifest
 
 
+def generate_document(
+    meeting_dir: Path,
+    cfg: dict[str, Any],
+    kind: str,
+    render_diagrams: bool = True,
+) -> dict[str, Any]:
+    """Generates only the requested document type and updates the manifest."""
+    meeting_dir = Path(meeting_dir)
+    kind = str(kind).strip().lower()
+    if kind not in DOCUMENT_KINDS:
+        raise ValueError(f"unknown document kind: {kind}")
+    result, transcript = _load_sources(meeting_dir)
+    out_dir = meeting_dir / "documenti"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    root = Path(cfg["_root"])
+
+    if kind == "md":
+        path = out_dir / "verbale.md"
+        path.write_text(meeting_markdown(result, transcript), encoding="utf-8")
+        paths = [path]
+    elif kind == "pdf":
+        paths = [render_pdf(result, transcript, out_dir, root)]
+    elif kind == "docx":
+        paths = [render_docx(result, transcript, out_dir)]
+    elif kind == "diagrams":
+        paths = render_mermaid(result, out_dir, render_diagrams)
+    else:  # a single diagram: mindmap or flow
+        key = "mindmap_mermaid" if kind == "mindmap" else "flusso_mermaid"
+        paths = render_mermaid({key: result.get(key, "")}, out_dir, render_diagrams)
+    return _update_manifest(meeting_dir, paths)
+
+
+def finalize(meeting_dir: Path, cfg: dict[str, Any], render_diagrams: bool = True) -> dict[str, Any]:
+    """Generates every document type (explicit 'generate all' action only)."""
+    manifest: dict[str, Any] = {"documenti": []}
+    for kind in ("md", "pdf", "docx", "diagrams"):
+        manifest = generate_document(meeting_dir, cfg, kind, render_diagrams=render_diagrams)
+    return manifest
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Genera i documenti finali di una riunione")
-    parser.add_argument("--meeting", required=True, help="cartella output/<id-riunione>")
-    parser.add_argument("--no-diagrams", action="store_true", help="scrive solo i .mmd, senza npx")
+    parser = argparse.ArgumentParser(description="Generates the final documents of a meeting")
+    parser.add_argument("--meeting", required=True, help="output/<meeting-id> folder")
+    parser.add_argument("--no-diagrams", action="store_true", help="only writes the .mmd files, without npx")
     parser.add_argument("--config", default=None)
     args = parser.parse_args()
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Elenca i dispositivi di ingresso: usalo dopo aver collegato il mic USB."""
+"""Lists input devices: use it after connecting the USB mic."""
 
 from capture import list_input_devices
 
 if __name__ == "__main__":
-    print("Dispositivi di ingresso disponibili:")
+    print("Available input devices:")
     for line in list_input_devices():
         print("  " + line)
     print(
-        "\nPer usarlo: export RIUNIONI_AUDIO_DEVICE=\"hw:<numero>,0\" "
-        "prima di avviare server.py"
+        "\nTo use it: export RIUNIONI_AUDIO_DEVICE=\"hw:<number>,0\" "
+        "before starting server.py"
     )

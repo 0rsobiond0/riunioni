@@ -1,8 +1,8 @@
-"""Server FastAPI: cattura, sottotitoli live e pagina /display per la TV.
+"""FastAPI server: capture, live subtitles and /display page for the TV.
 
-Avvio:
+Startup:
     .venv/bin/python server.py
-Poi aprire http://localhost:8000/display sul display esteso (HDMI).
+Then open http://localhost:8000/display on the extended display (HDMI).
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Registratore riunioni", lifespan=lifespan)
+app = FastAPI(title="Meeting recorder", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 
 audio_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=64)
@@ -56,8 +56,8 @@ transcriber: LiveTranscriber | None = None
 llm: LLMLoop | None = None
 _accurate_thread: threading.Thread | None = None
 
-# I lavori di finalizzazione sopravvivono allo stato live: dopo un riavvio
-# del PC si puo' generare una riunione salvata il giorno prima.
+# Finalization jobs survive the live state: after a PC restart
+# you can generate a meeting saved the day before.
 jobs: dict[str, dict[str, Any]] = {}
 _jobs_lock = threading.Lock()
 _VALID_MEETING_ID = re.compile(
@@ -118,7 +118,7 @@ def _job_start(kind: str, meeting_id: str) -> str:
         jobs[key] = {
             "kind": kind,
             "meeting_id": meeting_id,
-            "status": "in corso",
+            "status": "in progress",
             "started_at": time.time(),
             "finished_at": None,
             "log": [],
@@ -149,7 +149,7 @@ def _job_finish(key: str, status: str, **extra: Any) -> None:
 
 
 def _wav_duration_seconds(path: Path) -> int:
-    """Legge solo l'header WAV: veloce anche con registrazioni di ore."""
+    """Reads only the WAV header: fast even with hours-long recordings."""
     try:
         with wave.open(str(path), "rb") as handle:
             rate = handle.getframerate()
@@ -159,21 +159,21 @@ def _wav_duration_seconds(path: Path) -> int:
 
 
 def _accurate_estimate_seconds(duration: int) -> int:
-    """Stima tarata su questa CPU: ~1,3x il tempo reale piu' il carico del modello."""
+    """Estimate based on configured factors: audio duration plus model load."""
     fin = cfg.get("finalization", {})
     factor = float(fin.get("accurate_speed_factor", 1.3))
     overhead = float(fin.get("accurate_overhead_seconds", 10))
     return max(1, int(duration * factor + overhead + 0.5))
 
 
-def format_stima(seconds: int) -> str:
+def format_estimate(seconds: int) -> str:
     seconds = max(1, int(seconds))
     minutes, secs = divmod(seconds, 60)
     if not minutes:
-        return f"circa {secs} s"
+        return f"about {secs} s"
     if not secs:
-        return f"circa {minutes} min"
-    return f"circa {minutes} min {secs} s"
+        return f"about {minutes} min"
+    return f"about {minutes} min {secs} s"
 
 
 def _meeting_dirs() -> list[Path]:
@@ -193,26 +193,26 @@ def _resolve_meeting_dir(meeting_id: str | None, allow_live: bool = True) -> tup
     if not meeting_id:
         saved = _meeting_dirs()
         if not saved:
-            raise FileNotFoundError("nessuna riunione salvata")
+            raise FileNotFoundError("no saved meeting")
         meeting_id = saved[0].name
     if not _VALID_MEETING_ID.match(meeting_id):
-        raise ValueError(f"id riunione non valido: {meeting_id}")
+        raise ValueError(f"invalid meeting id: {meeting_id}")
     meeting_dir = ROOT / cfg["paths"]["output_dir"] / meeting_id
     if not (meeting_dir / "audio.wav").exists():
-        raise FileNotFoundError(f"audio grezzo mancante per {meeting_id}")
+        raise FileNotFoundError(f"raw audio missing for {meeting_id}")
     return meeting_id, meeting_dir
 
 
 def _meeting_busy(meeting_id: str) -> bool:
     with _jobs_lock:
         return any(
-            item["meeting_id"] == meeting_id and item["status"] == "in corso"
+            item["meeting_id"] == meeting_id and item["status"] == "in progress"
             for item in jobs.values()
         )
 
 
 def _sync_live_status(meeting_id: str, status: str, message: str) -> None:
-    """Aggiorna lo stato live solo se la riunione lavorata e' quella corrente."""
+    """Updates the live status only if the meeting being processed is the current one."""
     if state is not None and state.meeting_id == meeting_id:
         state.set_status(status)
         state.add_log(message)
@@ -222,10 +222,10 @@ def _sync_live_status(meeting_id: str, status: str, message: str) -> None:
 def _build_result() -> dict[str, Any]:
     assert state is not None
     result = dict(state.result)
-    result.setdefault("titolo", f"Verbale riunione {state.meeting_id}")
+    result.setdefault("titolo", f"Meeting minutes {state.meeting_id}")
     result.setdefault("data", datetime.now().strftime("%Y-%m-%d"))
     result.setdefault("partecipanti", [])
-    result.setdefault("riassunto", "(riassunto non disponibile: LLM non configurato o non raggiungibile)")
+    result.setdefault("riassunto", "(summary unavailable: LLM not configured or unreachable)")
     result.setdefault("decisioni", [])
     result.setdefault("azioni", [])
     result.setdefault("argomenti", [])
@@ -237,7 +237,7 @@ def _build_result() -> dict[str, Any]:
 @app.get("/display", response_class=HTMLResponse)
 async def display() -> HTMLResponse:
     html = (ROOT / "static" / "display.html").read_text(encoding="utf-8")
-    # Niente cache: le correzioni alla pagina devono apparire subito dopo un riavvio.
+    # No cache: page fixes must appear right after a restart.
     return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
 
@@ -295,7 +295,7 @@ async def api_jobs() -> dict[str, Any]:
 
 @app.get("/api/transcript")
 async def api_transcript(meeting_id: str | None = None) -> JSONResponse:
-    """Restituisce la trascrizione salvata di una riunione, live o accurata."""
+    """Returns the saved transcript of a meeting, live or accurate."""
     try:
         meeting_id, meeting_dir = _resolve_meeting_dir(meeting_id)
     except (FileNotFoundError, ValueError) as exc:
@@ -313,16 +313,16 @@ async def api_transcript(meeting_id: str | None = None) -> JSONResponse:
 
 @app.get("/api/document")
 async def api_document(meeting_id: str | None = None, file: str | None = None):
-    """Serve un documento gia' generato (PDF, DOCX, MD, JSON, SVG...)."""
+    """Serves an already generated document (PDF, DOCX, MD, JSON, SVG...)."""
     try:
         meeting_id, meeting_dir = _resolve_meeting_dir(meeting_id)
     except (FileNotFoundError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=404)
     if not file:
-        return JSONResponse({"error": "file non specificato"}, status_code=400)
+        return JSONResponse({"error": "file not specified"}, status_code=400)
 
-    # Accetta sia il percorso relativo alla riunione ("documenti/verbale.pdf")
-    # sia il solo nome file ("verbale.pdf"), ma sempre dentro la cartella.
+    # Accepts both the path relative to the meeting ("documenti/verbale.pdf")
+    # and just the file name ("verbale.pdf"), but always inside the folder.
     candidate = meeting_dir / file
     if not candidate.exists():
         candidate = meeting_dir / "documenti" / file
@@ -330,11 +330,11 @@ async def api_document(meeting_id: str | None = None, file: str | None = None):
         resolved = candidate.resolve()
         resolved.relative_to(meeting_dir.resolve())
     except (ValueError, OSError):
-        return JSONResponse({"error": "percorso non valido"}, status_code=400)
+        return JSONResponse({"error": "invalid path"}, status_code=400)
     if not resolved.is_file():
-        return JSONResponse({"error": "file non trovato"}, status_code=404)
-    # PDF/immagini/testo si aprono direttamente nella nuova scheda; gli altri
-    # (DOCX...) scaricano con il nome corretto invece di "document".
+        return JSONResponse({"error": "file not found"}, status_code=404)
+    # PDF/images/text open directly in a new tab; the others
+    # (DOCX...) download with the correct name instead of "document".
     viewable = {".pdf", ".md", ".txt", ".json", ".svg", ".png", ".jpg", ".jpeg", ".html"}
     disposition = "inline" if resolved.suffix.lower() in viewable else "attachment"
     headers = {"Content-Disposition": f'{disposition}; filename="{resolved.name}"'}
@@ -350,7 +350,7 @@ async def api_devices() -> dict[str, Any]:
 async def api_start() -> JSONResponse:
     global state, capture, transcriber, llm
     if state is not None and state.status == "live":
-        return JSONResponse({"error": "riunione gia' in corso"}, status_code=409)
+        return JSONResponse({"error": "meeting already in progress"}, status_code=409)
 
     while not audio_queue.empty():
         audio_queue.get_nowait()
@@ -360,8 +360,8 @@ async def api_start() -> JSONResponse:
         meeting_id=meeting_id,
         output_dir=str(ROOT / cfg["paths"]["output_dir"] / meeting_id),
     )
-    state.set_status("avvio")
-    state.add_log(f"Riunione {meeting_id} creata")
+    state.set_status("starting")
+    state.add_log(f"Meeting {meeting_id} created")
 
     engine = cfg["stt_live"].get("engine", "faster_whisper")
     if engine == "vosk":
@@ -373,17 +373,17 @@ async def api_start() -> JSONResponse:
     try:
         transcriber.warmup()
     except Exception as exc:
-        state.set_status("errore-stt")
-        state.add_log(f"Impossibile caricare il modello STT: {exc}")
+        state.set_status("error-stt")
+        state.add_log(f"Unable to load the STT model: {exc}")
         return JSONResponse({"error": str(exc)}, status_code=500)
 
     capture = AudioCapture(cfg, state, audio_queue)
     try:
         audio_path = capture.start()
-        state.add_log(f"Audio grezzo: {audio_path}")
+        state.add_log(f"Raw audio: {audio_path}")
     except Exception as exc:
-        state.set_status("errore-audio")
-        state.add_log(f"Impossibile avviare il microfono: {exc}")
+        state.set_status("error-audio")
+        state.add_log(f"Unable to start the microphone: {exc}")
         return JSONResponse({"error": str(exc)}, status_code=500)
 
     transcriber.start()
@@ -399,7 +399,7 @@ async def api_start() -> JSONResponse:
 async def api_stop() -> JSONResponse:
     global state, transcriber, llm, capture
     if state is None:
-        return JSONResponse({"error": "nessuna riunione avviata"}, status_code=400)
+        return JSONResponse({"error": "no meeting started"}, status_code=400)
 
     if llm is not None and llm.enabled:
         llm.refresh_now()
@@ -422,10 +422,10 @@ async def api_stop() -> JSONResponse:
     )
 
     state.set_result(result)
-    state.set_status("salvato")
+    state.set_status("saved")
     state.add_log(
-        "Audio e trascrizione salvati. I documenti si generano dopo "
-        "con il pulsante 'Genera documenti' (anche a PC riavviato)."
+        "Audio and transcript saved. Documents are generated later "
+        "with the 'Generate documents' button (even after a PC restart)."
     )
     _push_state()
 
@@ -435,22 +435,22 @@ async def api_stop() -> JSONResponse:
             "output_dir": str(meeting_dir),
             "documenti": [],
             "segmenti_live": len(state.segments),
-            "nota": "Registrazione chiusa: documenti non ancora generati",
+            "nota": "Recording closed: documents not generated yet",
         }
     )
 
 
 def _ensure_result(meeting_dir: Path, meeting_id: str) -> None:
-    """Ricrea riunione.json se manca (es. riunione interrotta prima dello stop)."""
+    """Recreates riunione.json if missing (e.g. meeting interrupted before stop)."""
     if (meeting_dir / "riunione.json").exists():
         return
     transcript_path = meeting_dir / "trascrizione.txt"
     transcript = transcript_path.read_text(encoding="utf-8") if transcript_path.exists() else ""
     result = {
-        "titolo": f"Verbale riunione {meeting_id}",
+        "titolo": f"Meeting minutes {meeting_id}",
         "data": datetime.now().strftime("%Y-%m-%d"),
         "partecipanti": [],
-        "riassunto": "(riassunto non disponibile: LLM non configurato o non raggiungibile)",
+        "riassunto": "(summary unavailable: LLM not configured or unreachable)",
         "decisioni": [],
         "azioni": [],
         "argomenti": [],
@@ -469,24 +469,41 @@ def _finalize_worker(meeting_id: str, key: str, render_diagrams: bool) -> None:
         from finalize import finalize
 
         meeting_dir = ROOT / cfg["paths"]["output_dir"] / meeting_id
-        _job_log(key, "Generazione documenti avviata")
-        _sync_live_status(meeting_id, "finalizzazione", "Generazione documenti avviata")
+        _job_log(key, "Document generation started")
+        _sync_live_status(meeting_id, "finalizing", "Document generation started")
         _ensure_result(meeting_dir, meeting_id)
         manifest = finalize(meeting_dir, cfg, render_diagrams=render_diagrams)
-        _job_log(key, "Documenti pronti: " + ", ".join(manifest["documenti"]))
-        _job_finish(key, "completato", documenti=manifest["documenti"])
-        _sync_live_status(meeting_id, "finalizzato", f"Documenti pronti in {meeting_dir}")
+        _job_log(key, "Documents ready: " + ", ".join(manifest["documenti"]))
+        _job_finish(key, "completed", documenti=manifest["documenti"])
+        _sync_live_status(meeting_id, "finalized", f"Documents ready in {meeting_dir}")
     except Exception as exc:
-        _job_log(key, f"Errore: {exc}")
-        _job_finish(key, "errore", error=str(exc))
-        _sync_live_status(meeting_id, "errore-finalizzazione", f"Finalizzazione fallita: {exc}")
+        _job_log(key, f"Error: {exc}")
+        _job_finish(key, "error", error=str(exc))
+        _sync_live_status(meeting_id, "error-finalization", f"Finalization failed: {exc}")
 
 
-def _accurate_worker(
-    meeting_id: str, key: str, model: str | None, render_diagrams: bool
-) -> None:
+def _document_worker(meeting_id: str, key: str, kind: str, render_diagrams: bool) -> None:
+    """Generates only the requested document type, never the others."""
     try:
-        from finalize import finalize
+        from finalize import generate_document
+
+        meeting_dir = ROOT / cfg["paths"]["output_dir"] / meeting_id
+        _job_log(key, f"Generating {kind} document")
+        _sync_live_status(meeting_id, "finalizing", f"Generating {kind} document")
+        _ensure_result(meeting_dir, meeting_id)
+        manifest = generate_document(meeting_dir, cfg, kind, render_diagrams=render_diagrams)
+        _job_log(key, "Generated: " + ", ".join(manifest["documenti"]))
+        _job_finish(key, "completed", documenti=manifest["documenti"], kind=kind)
+        _sync_live_status(meeting_id, "finalized", f"{kind} document ready")
+    except Exception as exc:
+        _job_log(key, f"Error: {exc}")
+        _job_finish(key, "error", error=str(exc))
+        _sync_live_status(meeting_id, "error-finalization", f"Document generation failed: {exc}")
+
+
+def _accurate_worker(meeting_id: str, key: str, model: str | None) -> None:
+    """Transcription only: documents are generated separately by /api/finalize."""
+    try:
         from stt_final import transcribe_final
 
         meeting_dir = ROOT / cfg["paths"]["output_dir"] / meeting_id
@@ -494,25 +511,29 @@ def _accurate_worker(
         if model:
             run_cfg["stt_final"]["model"] = model
         estimate = _accurate_estimate_seconds(_wav_duration_seconds(meeting_dir / "audio.wav"))
-        stima = format_stima(estimate)
-        _job_log(key, f"Ritrascrizione accurata avviata · {stima}")
+        estimate_text = format_estimate(estimate)
+        _job_log(key, f"Accurate transcription started · {estimate_text}")
         _sync_live_status(
-            meeting_id, "ritrascrizione-accurata", f"Ritrascrizione accurata avviata · {stima}"
+            meeting_id, "accurate-transcription", f"Accurate transcription started · {estimate_text}"
         )
+        # Keep the live transcript before Whisper overwrites trascrizione.txt.
+        live = meeting_dir / "trascrizione.txt"
+        backup = meeting_dir / "trascrizione-live.txt"
+        if live.exists() and not backup.exists():
+            backup.write_bytes(live.read_bytes())
+            _job_log(key, "Live transcript kept as trascrizione-live.txt")
         payload = transcribe_final(meeting_dir, run_cfg)
         count = len(payload["segments"])
-        _job_log(key, f"Ritrascritti {count} segmenti da {payload['duration']:.0f}s di audio")
-        _ensure_result(meeting_dir, meeting_id)
-        manifest = finalize(meeting_dir, run_cfg, render_diagrams=render_diagrams)
-        _job_log(key, "Documenti pronti: " + ", ".join(manifest["documenti"]))
-        _job_finish(key, "completato", documenti=manifest["documenti"], segmenti=count)
+        _job_log(key, f"Transcribed {count} segments from {payload['duration']:.0f}s of audio")
+        _job_log(key, "Documents not touched: use 'Generate documents' when ready")
+        _job_finish(key, "completed", segmenti=count)
         _sync_live_status(
-            meeting_id, "finalizzato-accurato", f"Ritrascrizione accurata completata: {count} segmenti"
+            meeting_id, "transcribed-accurate", f"Accurate transcription ready: {count} segments"
         )
     except Exception as exc:
-        _job_log(key, f"Errore: {exc}")
-        _job_finish(key, "errore", error=str(exc))
-        _sync_live_status(meeting_id, "errore-ritrascrizione", f"Ritrascrizione fallita: {exc}")
+        _job_log(key, f"Error: {exc}")
+        _job_finish(key, "error", error=str(exc))
+        _sync_live_status(meeting_id, "error-transcription", f"Transcription failed: {exc}")
 
 
 def _payload_meeting_id(payload: dict[str, Any] | None) -> str | None:
@@ -532,13 +553,13 @@ def _bool_option(payload: dict[str, Any] | None, name: str, default: bool) -> bo
 
 @app.post("/api/finalize")
 async def api_finalize(payload: dict[str, Any] | None = Body(default=None)) -> JSONResponse:
-    """Genera i documenti da una riunione salvata, anche senza stato live."""
+    """Generates documents from a saved meeting, even without live state."""
     try:
         meeting_id, _meeting_dir = _resolve_meeting_dir(_payload_meeting_id(payload))
     except (FileNotFoundError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=404)
     if _meeting_busy(meeting_id):
-        return JSONResponse({"error": "lavoro gia' in corso per questa riunione"}, status_code=409)
+        return JSONResponse({"error": "job already in progress for this meeting"}, status_code=409)
 
     render = _bool_option(payload, "render_diagrams", False)
     key = _job_start("finalize", meeting_id)
@@ -546,43 +567,65 @@ async def api_finalize(payload: dict[str, Any] | None = Body(default=None)) -> J
         target=_finalize_worker, args=(meeting_id, key, render), daemon=True
     ).start()
     return JSONResponse(
-        {"status": "generazione avviata", "meeting_id": meeting_id, "job": key}
+        {"status": "generation started", "meeting_id": meeting_id, "job": key}
     )
 
 
-@app.post("/api/finalize-accurate")
+@app.post("/api/generate-document")
+async def api_generate_document(payload: dict[str, Any] | None = Body(default=None)) -> JSONResponse:
+    """Generates one document type on request; nothing is generated automatically."""
+    try:
+        meeting_id, _meeting_dir = _resolve_meeting_dir(_payload_meeting_id(payload))
+    except (FileNotFoundError, ValueError) as exc:
+        return JSONResponse({"error": str(exc)}, status_code=404)
+    kind = str((payload or {}).get("kind", "")).strip().lower()
+    from finalize import DOCUMENT_KINDS
+    if kind not in DOCUMENT_KINDS:
+        return JSONResponse({"error": f"unknown document kind: {kind}"}, status_code=400)
+    if _meeting_busy(meeting_id):
+        return JSONResponse({"error": "job already in progress for this meeting"}, status_code=409)
+    render = _bool_option(payload, "render_diagrams", False)
+    key = _job_start("finalize", meeting_id)
+    threading.Thread(
+        target=_document_worker, args=(meeting_id, key, kind, render), daemon=True
+    ).start()
+    return JSONResponse(
+        {"status": "generation started", "meeting_id": meeting_id, "kind": kind, "job": key}
+    )
+
+
+@app.post("/api/transcribe-accurate")
+@app.post("/api/finalize-accurate")  # backwards-compatible alias: transcription only
 async def api_finalize_accurate(
     payload: dict[str, Any] | None = Body(default=None),
 ) -> JSONResponse:
-    """Ritrascrizione Whisper + documenti finali di una riunione salvata."""
+    """Whisper transcription only; documents are generated by /api/finalize."""
     global _accurate_thread
     try:
         meeting_id, _meeting_dir = _resolve_meeting_dir(_payload_meeting_id(payload))
     except (FileNotFoundError, ValueError) as exc:
         return JSONResponse({"error": str(exc)}, status_code=404)
     if _meeting_busy(meeting_id):
-        return JSONResponse({"error": "lavoro gia' in corso per questa riunione"}, status_code=409)
+        return JSONResponse({"error": "job already in progress for this meeting"}, status_code=409)
 
     model = None
     if payload and payload.get("model"):
         model = str(payload["model"])
     elif cfg.get("finalization", {}).get("accurate_model"):
         model = str(cfg["finalization"]["accurate_model"])
-    render = _bool_option(payload, "accurate_render_diagrams", True)
-
     estimate = _accurate_estimate_seconds(_wav_duration_seconds(_meeting_dir / "audio.wav"))
     key = _job_start("accurate", meeting_id)
     _accurate_thread = threading.Thread(
-        target=_accurate_worker, args=(meeting_id, key, model, render), daemon=True
+        target=_accurate_worker, args=(meeting_id, key, model), daemon=True
     )
     _accurate_thread.start()
     return JSONResponse(
         {
-            "status": "ritrascrizione avviata",
+            "status": "transcription started",
             "meeting_id": meeting_id,
             "job": key,
             "accurate_estimate_seconds": estimate,
-            "stima": format_stima(estimate),
+            "estimate": format_estimate(estimate),
         }
     )
 

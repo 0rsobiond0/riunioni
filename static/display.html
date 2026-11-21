@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Registratore riunioni · display</title>
+<title>Meeting Recorder · display</title>
 <style>
   :root {
     color-scheme: dark;
@@ -43,9 +43,10 @@
   .pill { padding: .2rem .7rem; border-radius: 1rem; background: var(--control); font-size: .95rem; }
   .pill.live { background: var(--live-bg); color: var(--live-fg); }
   .pill.err { background: var(--err-bg); color: var(--err-fg); }
-  /* Barre sempre sopra gli overlay: i pulsanti restano cliccabili anche
-     mentre si sta guardando la trascrizione o i documenti. */
-  header, #menu, #archivio { position: relative; z-index: 20; }
+  /* Stacking order: full-screen overlays on top (so their Close button is
+     always clickable), then header/action bar, then the dropdown menus. */
+  header, #archivio { position: relative; z-index: 30; }
+  #menu { position: relative; z-index: 20; }
   #menu {
     display: flex; align-items: flex-start; gap: .6rem; flex: none;
     padding: .35rem 1.2rem; background: var(--panel-2);
@@ -65,8 +66,9 @@
     background: var(--panel); color: var(--muted); font-size: .8rem;
   }
   .menu-list {
-    position: absolute; top: calc(100% + .35rem); left: 0; z-index: 30;
-    min-width: 24rem; max-height: 62vh; overflow: auto;
+    /* Placed by JS just below the whole top bar, never over the navbar. */
+    position: fixed; top: 0; left: 0; z-index: 25;
+    min-width: 24rem; max-height: 60vh; overflow: auto;
     background: var(--panel); border: 1px solid var(--line);
     border-radius: .6rem; padding: .4rem;
     box-shadow: 0 .8rem 2rem rgba(0, 0, 0, .45);
@@ -91,7 +93,7 @@
   #job { margin-left: auto; color: var(--accent); font-size: .9rem; }
   #job.err { color: var(--danger); }
   #transcript-overlay {
-    position: fixed; inset: 0; z-index: 10; padding: 3rem;
+    position: fixed; inset: 0; z-index: 40; padding: 3rem;
     background: var(--overlay); display: flex;
     align-items: center; justify-content: center;
   }
@@ -104,7 +106,7 @@
   #transcript-title { flex: 1; font-size: 1.2rem; color: var(--accent); }
   #transcript-text { overflow: auto; white-space: pre-wrap; font-size: 1.35rem; line-height: 1.5; }
   #document-overlay {
-    position: fixed; inset: 0; z-index: 10; padding: 3rem;
+    position: fixed; inset: 0; z-index: 40; padding: 3rem;
     background: var(--overlay); display: flex;
     align-items: center; justify-content: center;
   }
@@ -113,7 +115,7 @@
     width: min(1100px, 100%); max-height: 100%; display: flex; flex-direction: column;
     background: var(--panel); border: 2px solid var(--line); border-radius: .8rem; padding: 1.2rem;
   }
-  #document-overlay .head { display: flex; align-items: center; gap: 1rem; margin-bottom: .8rem; }
+  #document-overlay .head { display: flex; align-items: center; gap: .6rem; margin-bottom: .8rem; flex-wrap: wrap; }
   #document-title { flex: 1; font-size: 1.2rem; color: var(--accent); }
   #document-list { overflow: auto; display: flex; flex-direction: column; gap: .6rem; }
   .doc-link {
@@ -163,19 +165,19 @@
 </head>
 <body>
 <header>
-  <h1>Registratore riunioni</h1>
-  <button id="btn-theme" title="Passa dal tema scuro al tema chiaro">☀ Chiaro</button>
+  <h1>Meeting Recorder</h1>
+  <button id="btn-theme" title="Switch from dark theme to light theme">☀ Light</button>
   <span class="pill" id="meeting">—</span>
   <span class="pill" id="timer">00:00</span>
   <span class="pill" id="lag">lag —</span>
   <span class="pill" id="status">idle</span>
-  <button id="btn-start">Avvia</button>
-  <button id="btn-stop" disabled>Ferma e salva</button>
+  <button id="btn-start">Start</button>
+  <button id="btn-stop" disabled>Stop and save</button>
 </header>
 
 <nav id="menu">
   <details class="menu" id="menu-base">
-    <summary>▾ Riunioni base <span class="count" id="count-base">0</span></summary>
+    <summary>▾ Basic meetings <span class="count" id="count-base">0</span></summary>
     <div class="menu-list" id="list-base"></div>
   </details>
   <details class="menu" id="menu-accurate">
@@ -183,37 +185,37 @@
     <div class="menu-list" id="list-accurate"></div>
   </details>
   <details class="menu" id="menu-docs">
-    <summary>▾ Documenti <span class="count" id="count-docs">0</span></summary>
+    <summary>▾ Documents <span class="count" id="count-docs">0</span></summary>
     <div class="menu-list" id="list-docs"></div>
   </details>
 </nav>
 
 <div id="archivio">
-  <label>Selezionata</label>
+  <label>Selected</label>
   <span class="pill" id="selected-meeting">—</span>
-  <button id="btn-transcript" disabled>Mostra trascrizione</button>
-  <button id="btn-documents" disabled>Mostra documenti</button>
-  <button id="btn-finalize" disabled>Genera documenti</button>
-  <button id="btn-accurate" disabled>Ritrascrizione accurata</button>
+  <button id="btn-transcript" disabled>Show transcript</button>
+  <button id="btn-documents" disabled>Show documents</button>
+  <button id="btn-finalize" disabled>Generate documents</button>
+  <button id="btn-accurate" disabled>Accurate transcription</button>
   <span id="job"></span>
 </div>
 
 <main>
   <section>
-    <h2>Sottotitoli live</h2>
+    <h2>Live subtitles</h2>
     <div id="sottotitoli"></div>
     <div id="partiale"></div>
   </section>
   <section>
-    <h2>Mappa / argomenti</h2>
-    <div id="mappa"><pre id="mappa-codice">In attesa dell'LLM…</pre></div>
-    <h2 style="margin-top:1rem">Riassunto</h2>
+    <h2>Mind map / topics</h2>
+    <div id="mappa"><pre id="mappa-codice">Waiting for the LLM…</pre></div>
+    <h2 style="margin-top:1rem">Summary</h2>
     <div id="riassunto">—</div>
   </section>
   <section id="destra">
-    <h2>Decisioni</h2><ul id="decisioni"><li>—</li></ul>
-    <h2>Azioni</h2><div id="azioni"></div>
-    <h2>Argomenti</h2><div id="argomenti"></div>
+    <h2>Decisions</h2><ul id="decisioni"><li>—</li></ul>
+    <h2>Actions</h2><div id="azioni"></div>
+    <h2>Topics</h2><div id="argomenti"></div>
     <div id="log"></div>
   </section>
 </main>
@@ -221,8 +223,8 @@
 <div id="transcript-overlay" hidden>
   <div class="panel">
     <div class="head">
-      <span id="transcript-title">Trascrizione</span>
-      <button id="btn-close-transcript">Chiudi</button>
+      <span id="transcript-title">Transcript</span>
+      <button id="btn-close-transcript">Close</button>
     </div>
     <pre id="transcript-text"></pre>
   </div>
@@ -231,9 +233,13 @@
 <div id="document-overlay" hidden>
   <div class="panel">
     <div class="head">
-      <span id="document-title">Documenti</span>
-      <button id="btn-doc-accurate">Ritrascrivi accurata</button>
-      <button id="btn-close-documents">Chiudi</button>
+      <span id="document-title">Documents</span>
+      <button id="btn-generate-md">Generate Markdown</button>
+      <button id="btn-generate-pdf">Generate PDF</button>
+      <button id="btn-generate-docx">Generate DOCX</button>
+      <button id="btn-generate-diagrams">Generate diagrams</button>
+      <button id="btn-doc-accurate">Re-transcribe accurately</button>
+      <button id="btn-close-documents">Close</button>
     </div>
     <div id="document-list"></div>
   </div>
@@ -255,7 +261,7 @@ let currentStatus = {};
 let activeTheme = "dark";
 try {
   activeTheme = localStorage.getItem("riunioni-theme") === "light" ? "light" : "dark";
-} catch (e) { /* localStorage puo' essere bloccato: resta il tema scuro */ }
+} catch (e) { /* localStorage may be blocked: keep the dark theme */ }
 mermaidReady = !!(window.mermaid);
 
 function applyTheme(name) {
@@ -264,8 +270,8 @@ function applyTheme(name) {
   try { localStorage.setItem("riunioni-theme", activeTheme); } catch (e) {}
   const btn = $("btn-theme");
   if (btn) {
-    btn.textContent = activeTheme === "dark" ? "☀ Chiaro" : "☾ Scuro";
-    btn.title = activeTheme === "dark" ? "Passa al tema chiaro" : "Passa al tema scuro";
+    btn.textContent = activeTheme === "dark" ? "☀ Light" : "☾ Dark";
+    btn.title = activeTheme === "dark" ? "Switch to light theme" : "Switch to dark theme";
   }
   if (mermaidReady) {
     try {
@@ -274,9 +280,9 @@ function applyTheme(name) {
         theme: activeTheme === "dark" ? "dark" : "neutral",
         securityLevel: "loose",
       });
-    } catch (e) { console.warn("Tema Mermaid non applicabile", e); }
+    } catch (e) { console.warn("Mermaid theme could not be applied", e); }
   }
-  // I colori SVG della mappa dipendono dal tema: forza un nuovo render.
+  // The map's SVG colors depend on the theme: force a new render.
   lastMap = "";
   const r = currentStatus.result || {};
   const mapCode = r.mindmap_mermaid || r.flusso_mermaid || "";
@@ -287,7 +293,7 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 }
 
-// HH:MM:SS con soli interi: niente decimali e minuti che arrivano a 60.
+// HH:MM:SS with integers only: no decimals and no minutes reaching 60.
 function fmtHMS(total) {
   const t = Math.max(0, Math.floor(total));
   const h = Math.floor(t / 3600);
@@ -329,7 +335,7 @@ function renderResult(result) {
     : "<li>—</li>";
 
   $("azioni").innerHTML = (result.azioni || []).length
-    ? `<table class="azioni"><tr><th>Cosa</th><th>Chi</th><th>Scadenza</th></tr>` +
+    ? `<table class="azioni"><tr><th>What</th><th>Who</th><th>Deadline</th></tr>` +
       result.azioni.map(a => {
         const o = typeof a === "string" ? {cosa: a} : a;
         return `<tr><td>${escapeHtml(o.cosa||"")}</td><td>${escapeHtml(o.chi||"")}</td><td>${escapeHtml(o.scadenza||"")}</td></tr>`;
@@ -347,15 +353,15 @@ function renderResult(result) {
 
 function renderJobs(jobs) {
   const box = $("job");
-  const active = (jobs || []).find(j => j.status === "in corso");
+  const active = (jobs || []).find(j => j.status === "in progress");
   if (!active) {
-    const failed = (jobs || []).find(j => j.status === "errore");
-    box.textContent = failed ? "ultimo lavoro: errore" : "";
+    const failed = (jobs || []).find(j => j.status === "error");
+    box.textContent = failed ? "last job: error" : "";
     box.className = failed ? "err" : "";
     return;
   }
   const line = (active.log || []).slice(-1)[0] || "";
-  box.textContent = `${active.kind === "accurate" ? "Ritrascrizione" : "Documenti"}: ${line}`;
+  box.textContent = `${active.kind === "accurate" ? "Re-transcription" : "Documents"}: ${line}`;
   box.className = "";
 }
 
@@ -369,19 +375,19 @@ function selectedMeetingInfo() {
     : null;
 }
 
-// Stima leggibile, identica a format_stima() sul server.
-function fmtStima(seconds) {
+// Readable estimate, identical to format_estimate() on the server.
+function fmtEstimate(seconds) {
   const t = Math.max(1, Math.round(seconds || 0));
   const min = Math.floor(t / 60), sec = t % 60;
-  if (!min) return `circa ${sec} s`;
-  if (!sec) return `circa ${min} min`;
-  return `circa ${min} min ${sec} s`;
+  if (!min) return `about ${sec} s`;
+  if (!sec) return `about ${min} min`;
+  return `about ${min} min ${sec} s`;
 }
 
 function updateArchiveButtons() {
   const info = selectedMeetingInfo();
   const live = currentStatus.status === "live";
-  const busy = (currentStatus.jobs || []).some(j => j.status === "in corso");
+  const busy = (currentStatus.jobs || []).some(j => j.status === "in progress");
   const chosen = !!currentMeetingId;
   const docs = (info?.documents || []).length > 0;
   $("selected-meeting").textContent = info ? meetingLabel(info) : "—";
@@ -395,12 +401,12 @@ function updateArchiveButtons() {
 }
 
 function meetingLabel(m) {
-  // I vecchi id senza ":" vengono mostrati comunque in forma leggibile.
+  // Old IDs without ":" are still shown in a readable format.
   return m.meeting_id.replace(/^(\d{8})-(\d{2})(\d{2})(\d{2})$/, "$1-$2:$3:$4");
 }
 
-// Tre menu separati: base (solo live), accurate (Whisper), documenti (file generati).
-// Una riunione puo' comparire in piu' menu: e' utile poterla ritrovare in entrambi.
+// Three separate menus: basic (live only), accurate (Whisper), documents (generated files).
+// A meeting can appear in more than one menu: it's useful to be able to find it in both.
 const menuDefs = [
   {
     key: "base", list: "list-base", count: "count-base",
@@ -410,12 +416,12 @@ const menuDefs = [
   {
     key: "accurate", list: "list-accurate", count: "count-accurate",
     filter: m => m.has_accurate,
-    meta: m => `Whisper · ${fmtStima(m.accurate_estimate_seconds)}`,
+    meta: m => `Whisper · ${fmtEstimate(m.accurate_estimate_seconds)}`,
   },
   {
     key: "docs", list: "list-docs", count: "count-docs",
     filter: m => (m.documents || []).length > 0,
-    meta: m => `${m.documents.length} file generati`,
+    meta: m => `${m.documents.length} generated files`,
   },
 ];
 
@@ -431,7 +437,7 @@ function renderMeetings() {
   const signature = JSON.stringify(meetings.map(m => [
     m.meeting_id, m.has_accurate, m.documents.length, m.duration_seconds,
   ]));
-  // Ricostruire i menu ogni 4 secondi faceva perdere la voce mentre era aperta.
+  // Rebuilding the menus every 4 seconds made the item disappear while it was open.
   if (signature !== meetingListSignature) {
     meetingListSignature = signature;
     for (const def of menuDefs) {
@@ -442,18 +448,28 @@ function renderMeetings() {
             `<button class="menu-item" data-id="${escapeHtml(m.meeting_id)}" data-kind="${def.key}">` +
             `${escapeHtml(meetingLabel(m))}<span class="meta">${escapeHtml(def.meta(m))}</span></button>`
           ).join("")
-        : `<div class="menu-empty">Nessuna riunione in questa categoria.</div>`;
+        : `<div class="menu-empty">No meetings in this category.</div>`;
     }
   }
   updateArchiveButtons();
 }
 
+let documentListSignature = "";
 async function loadMeetings() {
   try {
     const data = await (await fetch("/api/meetings")).json();
     meetings = data.meetings || [];
     renderMeetings();
-  } catch (e) { console.warn("caricamento riunioni fallito", e); }
+    // Keep the open viewer in sync when a generated file appears.
+    if (!$("document-overlay").hidden) {
+      const info = selectedMeetingInfo();
+      const signature = `${info?.meeting_id}|${(info?.documents || []).join(",")}`;
+      if (signature !== documentListSignature) {
+        documentListSignature = signature;
+        showDocuments();
+      }
+    }
+  } catch (e) { console.warn("failed to load meetings", e); }
 }
 
 function applyState(s) {
@@ -461,9 +477,9 @@ function applyState(s) {
   $("meeting").textContent = s.meeting_id || "—";
   const st = $("status");
   st.textContent = s.status || "idle";
-  st.className = "pill" + (s.status === "live" ? " live" : "") + (String(s.status).startsWith("errore") ? " err" : "");
-  // Il server invia i secondi gia' interi calcolati con orologio monotonico:
-  // niente Date.now()/started_at, che sbagliava dopo sospensioni e produceva decimali.
+  st.className = "pill" + (s.status === "live" ? " live" : "") + (String(s.status).startsWith("error") ? " err" : "");
+  // The server sends whole seconds computed with a monotonic clock:
+  // no Date.now()/started_at, which was wrong after suspend and produced decimals.
   elapsedBase = Math.floor(s.elapsed_seconds ?? 0);
   elapsedClock = Date.now();
   $("timer").textContent = fmtHMS(elapsedBase);
@@ -491,7 +507,7 @@ async function postJson(path, body) {
     });
     const data = await response.json();
     if (!response.ok || data.error) {
-      alert(data.error || `Errore ${response.status}`);
+      alert(data.error || `Error ${response.status}`);
     } else {
       await loadMeetings();
     }
@@ -501,10 +517,18 @@ async function postJson(path, body) {
 $("btn-theme").onclick = () => applyTheme(activeTheme === "dark" ? "light" : "dark");
 $("btn-start").onclick = () => postJson("/api/start");
 $("btn-stop").onclick = () => {
-  if (confirm("Fermare la registrazione e salvare audio + trascrizione? I documenti si generano dopo.")) {
+  if (confirm("Stop the recording and save audio + transcript? Documents will be generated later.")) {
     postJson("/api/stop");
   }
 };
+// An overlay covers the whole screen; close any open menu before showing it.
+function openOverlay(id) {
+  document.querySelectorAll("#menu details").forEach(d => { d.open = false; });
+  $("transcript-overlay").hidden = true;
+  $("document-overlay").hidden = true;
+  $(id).hidden = false;
+}
+
 async function showTranscript() {
   const id = selectedMeeting();
   if (!id) return;
@@ -512,13 +536,13 @@ async function showTranscript() {
     const response = await fetch(`/api/transcript?meeting_id=${encodeURIComponent(id)}`);
     const data = await response.json();
     if (!response.ok || data.error) {
-      alert(data.error || `Errore ${response.status}`);
+      alert(data.error || `Error ${response.status}`);
       return;
     }
     $("transcript-title").textContent =
-      `Trascrizione ${id} · ${data.accurata ? "accurata (Whisper)" : "live (Vosk)"}`;
-    $("transcript-text").textContent = data.trascrizione || "(trascrizione vuota)";
-    $("transcript-overlay").hidden = false;
+      `Transcript ${id} · ${data.accurata ? "accurate (Whisper)" : "live (Vosk)"}`;
+    $("transcript-text").textContent = data.trascrizione || "(empty transcript)";
+    openOverlay("transcript-overlay");
   } catch (e) { alert(String(e)); }
 }
 function docIcon(name) {
@@ -531,7 +555,7 @@ function showDocuments() {
   if (!info) return;
   const id = info.meeting_id;
   const files = info.documents || [];
-  $("document-title").textContent = `Documenti · ${id}`;
+  $("document-title").textContent = `Documents · ${id}`;
   $("document-list").innerHTML = files.length
     ? files.map(path => {
         const name = path.split("/").pop();
@@ -540,13 +564,23 @@ function showDocuments() {
                `<span class="icon">${docIcon(name)}</span><span>${escapeHtml(name)}</span>` +
                `<span class="meta">${escapeHtml(path)}</span></a>`;
       }).join("")
-    : "<p>Nessun documento generato per questa riunione.</p>";
-  $("document-overlay").hidden = false;
+    : "<p>No documents generated for this meeting. Use the buttons above to generate one.</p>";
+  documentListSignature = `${id}|${files.join(",")}`;
+  openOverlay("document-overlay");
+}
+
+function generateDocument(kind) {
+  const id = selectedMeeting();
+  if (id) postJson("/api/generate-document", {meeting_id: id, kind: kind});
 }
 
 $("btn-transcript").onclick = showTranscript;
 $("btn-close-transcript").onclick = () => { $("transcript-overlay").hidden = true; };
 $("btn-documents").onclick = showDocuments;
+$("btn-generate-md").onclick = () => generateDocument("md");
+$("btn-generate-pdf").onclick = () => generateDocument("pdf");
+$("btn-generate-docx").onclick = () => generateDocument("docx");
+$("btn-generate-diagrams").onclick = () => generateDocument("diagrams");
 $("btn-close-documents").onclick = () => { $("document-overlay").hidden = true; };
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
@@ -557,7 +591,7 @@ document.addEventListener("keydown", (e) => {
 
 $("btn-finalize").onclick = () => {
   const id = selectedMeeting();
-  if (id && confirm(`Generare i documenti di ${id}?`)) {
+  if (id && confirm(`Generate the documents for ${id}?`)) {
     postJson("/api/finalize", {meeting_id: id});
   }
 };
@@ -565,29 +599,44 @@ $("btn-accurate").onclick = () => {
   const id = selectedMeeting();
   const info = selectedMeetingInfo();
   if (!id) return;
-  const stima = fmtStima(info?.accurate_estimate_seconds);
-  if (confirm(`Ritrascrivere ${id} con Whisper? Tempo stimato: ${stima}.`)) {
-    postJson("/api/finalize-accurate", {meeting_id: id});
+  const estimate = fmtEstimate(info?.accurate_estimate_seconds);
+  if (confirm(`Re-transcribe ${id} with Whisper? Estimated time: ${estimate}.\nDocuments are NOT regenerated: use "Generate documents" later.`)) {
+    postJson("/api/transcribe-accurate", {meeting_id: id});
   }
 };
-// Delegazione sugli elementi dei menu: restano validi dopo ogni aggiornamento.
+// Event delegation on menu items: they remain valid after every update.
 $("menu").addEventListener("click", (e) => {
   const item = e.target.closest(".menu-item");
   if (item) selectMeeting(item.dataset.id, item.dataset.kind);
 });
-// Un menu aperto alla volta.
+// Dropdowns open below the action bar, so the navbar is never covered.
+function placeMenuLists() {
+  const bottom = $("archivio").getBoundingClientRect().bottom;
+  document.querySelectorAll("#menu details").forEach(d => {
+    if (!d.open) return;
+    const list = d.querySelector(".menu-list");
+    const anchor = d.querySelector("summary").getBoundingClientRect();
+    list.style.top = `${Math.ceil(bottom) + 4}px`;
+    list.style.left = `${Math.round(anchor.left)}px`;
+    list.style.maxWidth = `calc(100vw - ${Math.round(anchor.left) + 12}px)`;
+    list.style.maxHeight = `calc(100vh - ${Math.ceil(bottom) + 16}px)`;
+  });
+}
+// Only one menu open at a time.
 document.querySelectorAll("#menu details").forEach(d => {
   d.addEventListener("toggle", () => {
     if (!d.open) return;
     document.querySelectorAll("#menu details").forEach(other => {
       if (other !== d) other.open = false;
     });
+    placeMenuLists();
   });
 });
+window.addEventListener("resize", placeMenuLists);
 $("btn-doc-accurate").onclick = () => { $("document-overlay").hidden = true; $("btn-accurate").click(); };
 
 setInterval(() => {
-  // Avanza solo durante la registrazione; il valore base arriva dal server.
+  // Advances only while recording; the base value comes from the server.
   if (currentStatus.status !== "live") return;
   const elapsed = elapsedBase + (Date.now() - elapsedClock) / 1000;
   $("timer").textContent = fmtHMS(elapsed);
@@ -605,10 +654,10 @@ ws.onmessage = (ev) => {
   } else if (msg.type === "result") renderResult(msg.data);
   else if (msg.type === "jobs") renderJobs(msg.data);
 };
-ws.onclose = () => { $("status").textContent = "connessione persa"; };
+ws.onclose = () => { $("status").textContent = "connection lost"; };
 
-// Ricarica periodica: aggiorna i lavori in background e ritrova il server
-// anche dopo un riavvio del PC, quando il WebSocket non viene riconnesso.
+// Periodic reload: updates background jobs and finds the server again
+// even after a PC reboot, when the WebSocket is not reconnected.
 setInterval(() => {
   fetch("/api/status").then(r => r.json()).then(applyState).catch(() => {});
   loadMeetings();
