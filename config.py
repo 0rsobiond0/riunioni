@@ -17,6 +17,7 @@ _ENV_MAP: dict[str, tuple[str, str]] = {
     "RIUNIONI_LLM_MODELS": ("llm", "models"),
     "RIUNIONI_AUDIO_DEVICE": ("audio", "device"),
     "RIUNIONI_STT_LIVE_MODEL": ("stt_live", "model"),
+    "RIUNIONI_VOSK_MODEL": ("stt_live", "vosk_model"),
     "RIUNIONI_STT_FINAL_MODEL": ("stt_final", "model"),
 }
 

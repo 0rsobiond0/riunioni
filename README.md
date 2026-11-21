@@ -28,15 +28,34 @@ python3 -m venv .venv
 `faster-whisper` 1.2.1. `mermaid.min.js` is bundled in `static/vendor/`, so the
 live map works even without internet.
 
-Italian Vosk models are not included in the repository (they are too large).
-Download a model from the Vosk model list and extract it into `models/`:
+### Download the speech models
 
-- `vosk-model-it-0.22` — recommended default, higher accuracy;
-- `vosk-model-small-it-0.22` — lighter and faster to load, but less accurate.
+The speech models are intentionally not stored in GitHub: the full Italian
+Vosk model is about 1.2 GB and the Whisper model is several GB. After creating
+`.venv`, run:
 
-To use the lightweight model, uncomment the corresponding `vosk_model` line in
-`config.yaml`. The model is loaded before capture starts, so loading time does
-not end up in the transcript.
+```bash
+.venv/bin/python scripts/download_models.py
+```
+
+This downloads the official `vosk-model-it-0.22` model from
+<https://alphacephei.com/vosk/models>, installs it in
+`models/vosk-model-it-0.22`, and preloads faster-whisper `medium` into the
+local Hugging Face cache. The command is safe to run again: completed models
+are reused, and an interrupted Vosk archive is resumed when possible.
+
+For a lighter live model (about 48 MB, lower accuracy), use:
+
+```bash
+.venv/bin/python scripts/download_models.py --vosk-model small
+```
+
+This also writes `RIUNIONI_VOSK_MODEL` to the ignored local `.env`, so the
+server automatically uses the selected model without editing tracked files.
+The script must be run before starting the server. The server does not download
+models automatically, so startup remains predictable and can work offline once
+the models are installed. The Vosk model is loaded before capture starts, so
+loading time does not end up in the transcript.
 
 ## Startup
 
