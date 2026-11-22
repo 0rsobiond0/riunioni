@@ -3,8 +3,9 @@
 __pycache__/
 *.pyc
 
-# Heavy models: downloaded separately, not in the repo
+# Heavy models and download archives: downloaded separately, not in the repo
 models/
+.cache/
 
 # Recordings, transcripts, and real documents: NEVER on GitHub
 output/

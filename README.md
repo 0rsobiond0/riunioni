@@ -57,6 +57,14 @@ models automatically, so startup remains predictable and can work offline once
 the models are installed. The Vosk model is loaded before capture starts, so
 loading time does not end up in the transcript.
 
+### Demo status and next step
+
+For the current demo, finish downloading the configured models before starting
+an on-site test. The first live-subtitle test will use the full Italian Vosk
+model (`vosk-model-it-0.22`) for the best balance of speed and accuracy. Model
+selection and automatic machine-performance recommendations are intentionally
+deferred until after this demo has been measured on real audio.
+
 ## Startup
 
 ```bash
