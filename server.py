@@ -525,6 +525,20 @@ def _accurate_worker(meeting_id: str, key: str, model: str | None) -> None:
         payload = transcribe_final(meeting_dir, run_cfg)
         count = len(payload["segments"])
         _job_log(key, f"Transcribed {count} segments from {payload['duration']:.0f}s of audio")
+        transcript = (meeting_dir / "trascrizione.txt").read_text(encoding="utf-8")
+        try:
+            from llm_loop import refresh_result_from_transcript
+
+            result_path = meeting_dir / "riunione.json"
+            previous = json.loads(result_path.read_text(encoding="utf-8")) if result_path.exists() else {}
+            refreshed = refresh_result_from_transcript(run_cfg, transcript, previous)
+            if refreshed != previous:
+                result_path.write_text(
+                    json.dumps(refreshed, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                _job_log(key, "Meeting summary and diagrams refreshed from accurate transcript")
+        except Exception as exc:
+            _job_log(key, f"Structured refresh skipped: {exc}")
         _job_log(key, "Documents not touched: use 'Generate documents' when ready")
         _job_finish(key, "completed", segmenti=count)
         _sync_live_status(
@@ -561,7 +575,7 @@ async def api_finalize(payload: dict[str, Any] | None = Body(default=None)) -> J
     if _meeting_busy(meeting_id):
         return JSONResponse({"error": "job already in progress for this meeting"}, status_code=409)
 
-    render = _bool_option(payload, "render_diagrams", False)
+    render = _bool_option(payload, "render_diagrams", True)
     key = _job_start("finalize", meeting_id)
     threading.Thread(
         target=_finalize_worker, args=(meeting_id, key, render), daemon=True

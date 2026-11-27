@@ -12,6 +12,9 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 VOSK_URLS = {
     "full": "https://alphacephei.com/vosk/models/vosk-model-it-0.22.zip",
     "small": "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip",
@@ -104,8 +107,9 @@ def install_whisper(model: str) -> None:
     except ImportError as exc:
         raise RuntimeError("faster-whisper non installato: esegui pip install -r requirements.txt") from exc
 
+    from stt_runtime import create_whisper_model
     print(f"Precarico faster-whisper {model} nella cache locale")
-    WhisperModel(model, device="cpu", compute_type="int8")
+    create_whisper_model(WhisperModel, model, {"compute_type": "int8"})
 
 
 def main() -> int:

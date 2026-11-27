@@ -57,6 +57,11 @@ models automatically, so startup remains predictable and can work offline once
 the models are installed. The Vosk model is loaded before capture starts, so
 loading time does not end up in the transcript.
 
+Whisper automatically uses CUDA with `float16` when `ctranslate2` detects a
+CUDA device, and falls back to CPU with `int8` when no GPU is available. The
+same best-available device is used for accurate transcription and the optional
+faster-whisper live engine.
+
 ### Demo status and next step
 
 For the current demo, finish downloading the configured models before starting
@@ -188,6 +193,9 @@ summary.
 
 After `Generate accurate transcription`:
 
+- the complete accurate transcript is sent to the configured LLM when available;
+- `riunione.json` is refreshed so summary, decisions, actions, mind map, and flow
+  describe the accurate transcript;
 - `trascrizione.json` — Whisper segments with timestamps;
 - `trascrizione.txt` — replaced by the accurate version;
 - `trascrizione-live.txt` — copy of the original live transcript.

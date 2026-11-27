@@ -14,6 +14,7 @@ stt_live:
   # vosk_model: models/vosk-model-small-it-0.22   # lightweight alternative: faster, less accurate
   model: base             # only used if engine: faster_whisper
   compute_type: int8
+  cuda_compute_type: float16
   cpu_threads: 4
   chunk_seconds: 3.0      # audio block transcribed only once
   overlap_seconds: 0.75   # overlap so words are not cut off
@@ -24,6 +25,7 @@ stt_live:
 stt_final:
   model: medium           # medium / large-v3, used when the meeting is finished
   compute_type: int8
+  cuda_compute_type: float16
   cpu_threads: 4
   beam_size: 5
   language: it
@@ -50,7 +52,7 @@ display:
 
 finalization:
   # "Stop and save" generates nothing: documents are created later, even offline.
-  render_diagrams: false          # true = SVG/PNG via npx (needs internet the first time)
+  render_diagrams: true           # SVG/PNG via npx (needs internet the first time)
   accurate_model: null            # null = use stt_final.model (medium)
   # Time estimate for accurate re-transcription; adjust to your machine.
   # estimated seconds = audio_duration * accurate_speed_factor + accurate_overhead_seconds

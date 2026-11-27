@@ -46,10 +46,11 @@ def transcribe_final(meeting_dir: Path, cfg: dict[str, Any]) -> dict[str, Any]:
     if rate != int(cfg["audio"]["sample_rate"]):
         raise ValueError(f"sample rate {rate} != {cfg['audio']['sample_rate']}")
 
-    model = WhisperModel(
+    from stt_runtime import create_whisper_model
+    model = create_whisper_model(
+        WhisperModel,
         stt["model"],
-        device="cpu",
-        compute_type=stt["compute_type"],
+        stt,
         cpu_threads=int(stt["cpu_threads"]),
     )
     glossary = cfg["llm"].get("glossary", "").strip().replace("\n", " ")

@@ -127,6 +127,7 @@
   .doc-link:hover { background: var(--control-hover); }
   .doc-link .icon { font-size: 1.5rem; }
   .doc-link .meta { color: var(--muted); font-size: .95rem; }
+  .doc-preview { max-width: 180px; max-height: 120px; object-fit: contain; background: white; border-radius: .3rem; }
   button {
     font: inherit; font-size: .95rem; padding: .35rem .9rem;
     border: 1px solid var(--control-border); border-radius: .5rem;
@@ -384,12 +385,26 @@ function fmtEstimate(seconds) {
   return `about ${min} min ${sec} s`;
 }
 
+function visibleDocuments(files) {
+  return (files || []).filter(path => /\.(pdf|docx|md|svg|png)$/i.test(path));
+}
+
+function updateOpenButtonLabel() {
+  const labels = {
+    base: "Open live transcript",
+    accurate: "Open accurate transcript",
+    docs: "Open documents",
+  };
+  $("btn-open").textContent = labels[currentMeetingKind] || "Open content";
+}
+
 function updateArchiveButtons() {
   const info = selectedMeetingInfo();
   const live = currentStatus.status === "live";
   const busy = (currentStatus.jobs || []).some(j => j.status === "in progress");
   const chosen = !!currentMeetingId;
   $("selected-meeting").textContent = info ? meetingLabel(info) : "—";
+  updateOpenButtonLabel();
   $("btn-open").disabled = !chosen;
   $("btn-finalize").disabled = live || busy || !chosen;
   $("btn-accurate").disabled = live || busy || !chosen;
@@ -419,7 +434,7 @@ const menuDefs = [
   {
     key: "docs", list: "list-docs", count: "count-docs",
     filter: m => (m.documents || []).length > 0,
-    meta: m => `${m.documents.length} generated files`,
+    meta: m => `${visibleDocuments(m.documents).length} generated files`,
   },
 ];
 
@@ -434,14 +449,14 @@ function selectMeeting(id, kind) {
 
 function openSelected() {
   const info = selectedMeetingInfo();
-  if (currentMeetingKind === "docs" && (info?.documents || []).length) showDocuments();
-  else if (info && (info.transcript_chars || 0) === 0 && (info.documents || []).length) showDocuments();
+  if (currentMeetingKind === "docs" && visibleDocuments(info?.documents).length) showDocuments();
+  else if (info && (info.transcript_chars || 0) === 0 && visibleDocuments(info.documents).length) showDocuments();
   else showTranscript();
 }
 
 function renderMeetings() {
   const signature = JSON.stringify(meetings.map(m => [
-    m.meeting_id, m.has_accurate, m.documents.length, m.duration_seconds,
+    m.meeting_id, m.has_accurate, visibleDocuments(m.documents).length, m.duration_seconds,
   ]));
   // Rebuilding the menus every 4 seconds made the item disappear while it was open.
   if (signature !== meetingListSignature) {
@@ -469,7 +484,7 @@ async function loadMeetings() {
     // Keep the open viewer in sync when a generated file appears.
     if (!$("document-overlay").hidden) {
       const info = selectedMeetingInfo();
-      const signature = `${info?.meeting_id}|${(info?.documents || []).join(",")}`;
+      const signature = `${info?.meeting_id}|${visibleDocuments(info?.documents).join(",")}`;
       if (signature !== documentListSignature) {
         documentListSignature = signature;
         showDocuments();
@@ -560,17 +575,20 @@ function showDocuments() {
   const info = selectedMeetingInfo();
   if (!info) return;
   const id = info.meeting_id;
-  const files = info.documents || [];
+  const files = visibleDocuments(info.documents);
   $("document-title").textContent = `Documents · ${id}`;
   $("document-list").innerHTML = files.length
     ? files.map(path => {
         const name = path.split("/").pop();
         const href = `/api/document?meeting_id=${encodeURIComponent(id)}&file=${encodeURIComponent(path)}`;
+        const ext = name.split(".").pop().toLowerCase();
+        const preview = (ext === "svg" || ext === "png")
+          ? `<img class="doc-preview" src="${href}" alt="${escapeHtml(name)}">` : "";
         return `<a class="doc-link" href="${href}" target="_blank" rel="noopener">` +
-               `<span class="icon">${docIcon(name)}</span><span>${escapeHtml(name)}</span>` +
+               `${preview}<span class="icon">${docIcon(name)}</span><span>${escapeHtml(name)}</span>` +
                `<span class="meta">${escapeHtml(path)}</span></a>`;
       }).join("")
-    : "<p>No documents generated for this meeting. Use the buttons above to generate one.</p>";
+    : "<p>No user documents generated for this meeting. Use the buttons above to generate one.</p>";
   documentListSignature = `${id}|${files.join(",")}`;
   openOverlay("document-overlay");
 }

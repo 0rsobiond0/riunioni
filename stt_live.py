@@ -45,10 +45,11 @@ class LiveTranscriber:
 
         stt = self.cfg["stt_live"]
         t0 = time.perf_counter()
-        self.model = WhisperModel(
+        from stt_runtime import create_whisper_model
+        self.model = create_whisper_model(
+            WhisperModel,
             stt["model"],
-            device="cpu",
-            compute_type=stt["compute_type"],
+            stt,
             cpu_threads=int(stt["cpu_threads"]),
         )
         self.state.add_log(

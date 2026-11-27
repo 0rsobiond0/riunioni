@@ -57,6 +57,46 @@ def normalize(data: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def refresh_result_from_transcript(
+    cfg: dict[str, Any], transcript: str, previous: dict[str, Any]
+) -> dict[str, Any]:
+    """Refresh structured minutes from a complete transcript when LLM is enabled."""
+    llm = cfg.get("llm", {})
+    if not llm.get("base_url") or not llm.get("models") or not transcript.strip():
+        return previous
+    from openai import OpenAI
+
+    client = OpenAI(
+        base_url=llm["base_url"],
+        api_key=llm.get("api_key") or "none",
+        timeout=float(llm.get("timeout_seconds", 45)),
+        max_retries=0,
+    )
+    prompt = (
+        "You are an assistant that produces meeting minutes. Respond ONLY with a valid JSON object.\n"
+        "Required schema:\n" + json.dumps(REQUIRED_KEYS, ensure_ascii=False)
+        + "\nGlossary:\n" + (llm.get("glossary") or "(empty)")
+        + "\nPrevious result:\n" + json.dumps(previous, ensure_ascii=False)[:6000]
+        + "\nComplete accurate transcript:\n" + transcript[:30000]
+    )
+    messages = [
+        {"role": "system", "content": "Respond exclusively with valid JSON."},
+        {"role": "user", "content": prompt},
+    ]
+    for model in llm["models"]:
+        try:
+            try:
+                response = client.chat.completions.create(
+                    model=model, messages=messages, response_format={"type": "json_object"}
+                )
+            except Exception:
+                response = client.chat.completions.create(model=model, messages=messages)
+            return normalize(extract_json(response.choices[0].message.content or ""))
+        except Exception:
+            continue
+    return previous
+
+
 class LLMLoop:
     def __init__(
         self,

@@ -13,6 +13,7 @@ import sys
 import time
 
 from faster_whisper import WhisperModel
+from stt_runtime import select_stt_runtime
 
 AUDIO = sys.argv[1] if len(sys.argv) > 1 else "tests/test_5min_16k.wav"
 CONFIGS = [
@@ -27,8 +28,9 @@ def main() -> None:
     print(f"Audio: {AUDIO}", flush=True)
     for name, beam in CONFIGS:
         t0 = time.perf_counter()
+        device, compute_type = select_stt_runtime({"compute_type": "int8"})
         model = WhisperModel(
-            name, device="cpu", compute_type="int8", cpu_threads=4
+            name, device=device, compute_type=compute_type, cpu_threads=4
         )
         load_s = time.perf_counter() - t0
 
